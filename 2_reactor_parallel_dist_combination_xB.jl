@@ -135,8 +135,9 @@ function MPC_solve(T0_1in,T0_2in,T1_0,xA1_0,xB1_0,T2_0,xA2_0,xB2_0,q_T,q_xA,q_xB
         dxBdt[k=0:K-1], xB[k+1]==(F1[k]*xB1[k+1]+F2[k]*xB2[k+1])/(F1[k]+F2[k])
     end
 
-    @objective(MPC,Min,q_T*(T1[1]-T10)^2+q_T*(T2[1]-T20)^2+q_xB*(xB[1]-xB10)^2+sum(q_T*(T1[k+1]-T10)^2+q_T*(T2[k+1]-T20)^2+q_xB*(xB[k+1]-xB10)^2
-        +r_heat*(Q1[k]-Q1[k-1])^2+r_heat*(Q2[k]-Q2[k-1])^2+r_flow*(F1[k]-F1[k-1])^2+r_flow*(F2[k]-F2[k-1])^2 for k=1:K-1))
+    # @objective(MPC,Min,q_T*(T1[1]-T10)^2+q_T*(T2[1]-T20)^2+q_xB*(xB[1]-xB10)^2+sum(q_T*(T1[k+1]-T10)^2+q_T*(T2[k+1]-T20)^2+q_xB*(xB[k+1]-xB10)^2+r_heat*(Q1[k]-Q1[k-1])^2+r_heat*(Q2[k]-Q2[k-1])^2+r_flow*(F1[k]-F1[k-1])^2+r_flow*(F2[k]-F2[k-1])^2 for k=1:K-1))
+    @objective(MPC,Min,sum(q_T*(T1[k]-T10)^2+q_T*(T2[k]-T20)^2+q_xB*(xB[k]-xB10)^2 for k=0:K)+sum(r_heat*(Q1[k]-Q1[k-1])^2+r_heat*(Q2[k]-Q2[k-1])^2+r_flow*(F1[k]-F1[k-1])^2+r_flow*(F2[k]-F2[k-1])^2 for k=1:K-1)+sum(r_heat*((Q1[0]-Q1[K-1])^2+(Q2[0]-Q2[K-1])^2)+r_flow*((F1[0]-F1[K-1])^2+(F2[0]-F2[K-1])^2)))
+
 
     # @objective(MPC,Min,sum(q_T*(T1[k]-T10)^2+q_T*(T2[k]-T20)^2+q_xB*(xB[k]-xB10)^2+r_heat*(Q1[k-1]-heat_ss1)^2+r_heat*(Q2[k-1]-heat_ss2)^2
     #     +r_flow*(F1[k-1]-flow_ss1)^2+r_flow*(F2[k-1]-flow_ss2)^2 for k=1:K))
@@ -151,8 +152,21 @@ function MPC_solve(T0_1in,T0_2in,T1_0,xA1_0,xB1_0,T2_0,xA2_0,xB2_0,q_T,q_xA,q_xB
     xA_soln2=JuMP.value.(xA2)
     xB_soln1=JuMP.value.(xB1)
     xB_soln2=JuMP.value.(xB2)
+    println("xB_soln1=",xB_soln1)
+    println("xB_soln2=",xB_soln2)
+    xB_soln=JuMP.value.(xB)
+    println("xB_soln=",xB_soln)
     T_soln1=JuMP.value.(T1)
     T_soln2=JuMP.value.(T2)
+
+    obj_T=sum(q_T*((T_soln1[k]-T10)^2+(T_soln2[k]-T20)^2) for k=0:K)
+    obj_xBt=sum(q_xB*(xB_soln[k]-xB10)^2 for k=0:K)
+    obj_Q=sum(r_heat*((heat_soln1[k]-heat_soln1[k-1])^2+(heat_soln2[k]-heat_soln2[k-1])^2) for k=1:K-1)+sum(r_heat*((heat_soln1[0]-heat_soln1[K-1])^2+(heat_soln2[0]-heat_soln2[K-1])^2))
+    obj_F=sum(r_flow*((flow_soln1[k]-flow_soln1[k-1])^2+(flow_soln2[k]-flow_soln2[k-1])^2) for k=1:K-1)+sum(r_flow*((flow_soln1[0]-flow_soln1[K-1])^2+(flow_soln2[0]-flow_soln2[K-1])^2))
+    println("Obj_T= ",obj_T)
+    println("Obj_xBt= ",obj_xBt)
+    println("Obj_Q= ",obj_Q)
+    println("Obj_F= ",obj_F)
     st=raw_status(MPC)
     if st=="Infeasible_Problem_Detected"
         println(xA1_guess,xA2_guess)
