@@ -1,7 +1,7 @@
 # For any given number of reactors and potential configurations
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
 
 function loadProcessData(N::Int,n::Array{Int,2})
     # global F0=9/3600/N #m^3/s
@@ -178,7 +178,8 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
 
 end
 
-function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,dist_time;tmax=200) # This is for continous disturbance on the (unstable) input temperature
+function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
+    dist_time;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
     # (runs the moving horizon loop for set point tracking)
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
@@ -299,18 +300,33 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,d
     # for i=1:N
     #     display(p[i])
     # end
-    p1=plot(times,transpose(T0_invt),xlabel="Time (s)",label=["R1" "R2" "R3"],ylabel="Input Temperature")
-    p2=plot(times,transpose(xBvt),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="Individual xB")
-    p3=plot(times,transpose(xBtvt),xlabel="Time (s)", label=false,ylabel="Final Output xB(xB3)")
-    p4=plot(times,transpose(heatvt),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="Q (kW)")
-    flow_plot=zeros(N,time_steps+1)
-    for i=1:N
-        flow_plot[i,:]=flowvt[i,N+1,:]
+    if print || save_plots
+        p1=plot(times,transpose(T0_invt),xlabel="Time (s)",label=["R1" "R2" "R3"],ylabel="Input Temperature")
+        p2=plot(times,transpose(xBvt),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="Individual xB")
+        p3=plot(times,transpose(xBtvt),xlabel="Time (s)", label=false,ylabel="Final Output xB(xB3)")
+        p4=plot(times,transpose(heatvt),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="Q (kW)")
+        flow_plot=zeros(N,time_steps+1)
+        for i=1:N
+            flow_plot[i,:]=flowvt[i,N+1,:]
+        end
+        p5=plot(times,transpose(flow_plot),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="F (m^3/s)")
+        p6=plot(times,transpose(Tvt),xlabel="Time (s)",label=["R1" "R2" "R3"],ylabel="Reactor Temperature")
+        p_all=plot(p1,p2,p3,p4,p5,p6,layout=(2,3),xtickfontsize=6,ytickfontsize=6,xguidefontsize=8,yguidefontsize=8)
+        if print
+            display(p_all)
+        end
+        if save_plots
+            println("saving fig to $plot_name")
+            savefig(plot_name)
+        end
     end
-    p5=plot(times,transpose(flow_plot),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="F (m^3/s)")
-    p6=plot(times,transpose(Tvt),xlabel="Time (s)",label=["R1" "R2" "R3"],ylabel="Reactor Temperature")
-    p_all=plot(p1,p2,p3,p4,p5,p6,layout=(2,3),xtickfontsize=6,ytickfontsize=6,xguidefontsize=8,yguidefontsize=8)
-    display(p_all)
+
+    s = zeros(4)
+    for t = 2:count
+        s += [sum((xBtvt[t] - xBs[1])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N for j=1:N+2),
+                sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N)]
+    end
+    return s
     # savefig("3R_1P2S_xBs_0.055_0.055_0.11_DistT3_10_time_8_allprofiles.png")
     # savefig("3R_1P2S_xBs_0.08_0.08_0.11_NoDist_allprofiles.png")
 
@@ -437,4 +453,88 @@ function findSS_all(T0_in,T_0,xB_0,n,Flow)
         flow_ss[i+1]=soln.zero[3*i+1]
     end
     return heat_ss,flow_ss
+end
+
+function permutate_weights(out_dir, disturbances)
+    original_weights = [1,1e7,1e7,1e-5,1e7]
+    powers_each_side = 2
+    permutation_weights = zeros(Float64, (2*powers_each_side + 1,length(original_weights)))
+    for i in 1:(2*powers_each_side + 1)
+        for j in 1:length(original_weights)
+            permutation_weights[i,j] = original_weights[j]*exp10(i - (powers_each_side + 1))
+        end
+    end
+    display(permutation_weights)
+    top_ten = fill(typemax(Float64), (10,10))
+
+    num_permutations = 5^5 - 1 # iterate in base 5 through all possible permutations
+
+    for i in ProgressBar(1735:1765)
+    # for i in ProgressBar(0:num_permutations)
+    # for i in 0:100
+        base_five = string(i, base=5, pad=5)
+        # println(base_five)
+        current_weights = original_weights
+        for j in 1:length(base_five)
+            char = base_five[j]
+            current_weights[j] = permutation_weights[parse(Int64, char) + 1, j]
+        end
+        q_T = current_weights[1]
+        q_xA = current_weights[2]
+        q_xB = current_weights[3]
+        r_heat = current_weights[4]
+        r_flow = current_weights[5]
+        # println(current_weights)
+        # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
+        discrepancies = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,q_T,q_xA,q_xB,r_heat,r_flow,90,1000,[8 15];tmax=5000, print=false)
+        # println("Discrepancies: $discrepancies")
+        sum_discrepancies = discrepancies[1]
+        m = maximum(top_ten[:,10])
+        if sum_discrepancies < m
+            insert_index = findall(x -> x==m, top_ten[:,10])[1]
+            top_ten[insert_index,1:5] = current_weights
+            top_ten[insert_index,6:9] = discrepancies
+            top_ten[insert_index,10] = sum_discrepancies
+        end
+        # for j in 1:10
+        #     # println("$(top_ten[j,10]) $sum_discrepancies")
+        #     is_full = maximum(top_ten[:,10]) != Inf
+        #     # println("$(top_ten[:,10]) $is_full")
+        #     if top_ten[j,10] > sum_discrepancies
+        #         !is_full && top_ten[j,10] != Inf && continue
+        #         top_ten[insert_index,1:5] = current_weights
+        #         top_ten[insert_index,6:9] = discrepancies
+        #         top_ten[insert_index,10] = sum_discrepancies
+        #         break
+        #     end
+        # end
+    end
+    display(top_ten)
+    println("writing top ten configurations to top_ten.txt")
+    top_ten_file = out_dir * "\\top_ten.txt"
+    touch(top_ten_file)
+    file = open(top_ten_file, "w")
+    writedlm(file, top_ten)
+    close(file)
+
+    originalDiscrepancy = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
+    print("\nOriginal discrepancy: ")
+    println(originalDiscrepancy[1] + originalDiscrepancy[4])
+    return top_ten
+end
+
+function save_profile_images(inputMatrix, disturbances, out_dir)
+    count = 1
+    for row in eachrow(inputMatrix)
+        println(row)
+        q_T = row[1]
+        q_xA = row[2]
+        q_xB = row[3]
+        r_heat = row[4]
+        r_flow = row[5]
+        image_name = join(row[1:5], "_")
+        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
+        MPC_tracking([0 0 1 1;0 0 1 1], disturbances,q_T,q_xA,q_xB,r_heat,r_flow,90,1000,[8 15];tmax=5000, print=false, save_plots=true, plot_name=image_name)
+        count += 1
+    end
 end
