@@ -332,12 +332,19 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
         end
     end
 
-    s = zeros(5)
+    s = zeros(6)
     for t = 2:count
         s += [sum((xBtvt[t] - xBs[1])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N for j=1:N+2),
-                sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0]
+                sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
     end
     s[5] = maximum(xBtvt)
+    epsilon = 0.01 * xBs[1]
+    for i in 1:length(xBtvt)
+        if i > dist_time[1] && xBtvt[i] < xBs[1] + epsilon
+            s[6] = i
+            break
+        end
+    end
     return s
     # savefig("3R_1P2S_xBs_0.055_0.055_0.11_DistT3_10_time_8_allprofiles.png")
     # savefig("3R_1P2S_xBs_0.08_0.08_0.11_NoDist_allprofiles.png")
@@ -479,7 +486,7 @@ function permutate_weights(out_dir, disturbances)
         end
     end
     display(permutation_weights)
-    top_ten = fill(typemax(Float64), (10,11))
+    top_ten = fill(typemax(Float64), (10,12))
 
     num_permutations = 5^5 - 1 # iterate in base 5 through all possible permutations
 
@@ -495,8 +502,8 @@ function permutate_weights(out_dir, disturbances)
     avg_max_xB_const_test_2 = 10.91 / 0.111299
 
 
-    for i in ProgressBar(1755:1765)
-    # for i in ProgressBar(0:num_permutations)
+    # for i in ProgressBar(1755:1765)
+    for i in ProgressBar(0:num_permutations)
     # for i in 0:100
         base_five = string(i, base=5, pad=5)
         # println(base_five)
@@ -523,13 +530,15 @@ function permutate_weights(out_dir, disturbances)
         # println("Discrepancies: $discrepancies")
         # sum_discrepancies = sum(discrepancies) # basic sum
         # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] # test 1
-        sum_discrepancies = xB_norm_const_test_2 * discrepancies[1] + discrepancies[2] + avg_max_xB_const_test_2 * discrepancies[5] # test 2
-        m = maximum(top_ten[:,11])
+        # sum_discrepancies = xB_norm_const_test_2 * discrepancies[1] + discrepancies[2] + avg_max_xB_const_test_2 * discrepancies[5] # test 2
+        # sum_discrepancies = discrepancies[5] # test 3
+        sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] + discrepancies[6]
+        m = maximum(top_ten[:,12])
         if sum_discrepancies < m
-            insert_index = findall(x -> x==m, top_ten[:,11])[1]
+            insert_index = findall(x -> x==m, top_ten[:,12])[1]
             top_ten[insert_index,1:5] = current_weights
-            top_ten[insert_index,6:10] = discrepancies
-            top_ten[insert_index,11] = sum_discrepancies
+            top_ten[insert_index,6:11] = discrepancies
+            top_ten[insert_index,12] = sum_discrepancies
         end
         # for j in 1:10
         #     # println("$(top_ten[j,10]) $sum_discrepancies")
@@ -559,7 +568,7 @@ function permutate_weights(out_dir, disturbances)
     writedlm(file, top_ten)
     close(file)
 
-    originalDiscrepancy = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000,print=false) # no disturbance
+    originalDiscrepancy = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000,print=true) # no disturbance
     return top_ten
 end
 
@@ -592,7 +601,7 @@ top_ten = permutate_weights(out_dir, disturbances)
 #                     0.01	100000.0	1.0e10	0.001	1.0e8	0.016582382266799704	133381.66374726084	2.601153486813718e-5	2.0605073022839876e6	0.016582382266799704
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Test 2 Images"
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Test 4 Images"
 save_profile_images(top_ten, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
