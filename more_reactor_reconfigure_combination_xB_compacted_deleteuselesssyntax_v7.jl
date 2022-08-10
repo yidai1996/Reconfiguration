@@ -337,7 +337,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
         s += [sum((xBtvt[t] - xBs[1])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N for j=1:N+2),
                 sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
     end
-    s[5] = maximum(xBtvt)
+    s[5] = maximum(Tvt[1,:])
     epsilon = 0.01 * xBs[1]
     for i in 1:length(xBtvt)
         if i > dist_time[1] && xBtvt[i] < xBs[1] + epsilon
@@ -532,7 +532,8 @@ function permutate_weights(out_dir, disturbances)
         # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] # test 1
         # sum_discrepancies = xB_norm_const_test_2 * discrepancies[1] + discrepancies[2] + avg_max_xB_const_test_2 * discrepancies[5] # test 2
         # sum_discrepancies = discrepancies[5] # test 3
-        sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] + discrepancies[6]
+        # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] + discrepancies[6] # test 4
+        sum_discrepancies = discrepancies[1] # like test 3 but instead with max temp
         m = maximum(top_ten[:,12])
         if sum_discrepancies < m
             insert_index = findall(x -> x==m, top_ten[:,12])[1]
@@ -601,7 +602,7 @@ top_ten = permutate_weights(out_dir, disturbances)
 #                     0.01	100000.0	1.0e10	0.001	1.0e8	0.016582382266799704	133381.66374726084	2.601153486813718e-5	2.0605073022839876e6	0.016582382266799704
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Test 4 Images"
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
 save_profile_images(top_ten, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
