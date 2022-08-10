@@ -3,7 +3,7 @@
 
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
 
-function loadProcessData(N::Int,n::Array{Int,2})
+function loadProcessData(N::Int,n::Array{Int,2};print=true)
     # global F0=9/3600/N #m^3/s
     global V=0.5/3 #m^3
     # global T0=[300 300 300] #K
@@ -38,11 +38,13 @@ function loadProcessData(N::Int,n::Array{Int,2})
     global Q_nom=zeros(N)
     global F_nom=zeros(N)
     Q_nom,F_nom=findSS_all(T0,Ts,xBs,n,Flow0)
-    println("Parameters Loaded!")
+    if print
+        println("Parameters Loaded!")
+    end
     # println("Q = ", Q_nom," F = ", F_nom)
 end
 
-function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0)
+function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
     # println("n=",n)
     global count
 
@@ -145,7 +147,9 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
     end
     # obj=getobjectivevalue(MPC) # works for Julia 1.15.3
     obj=objective_value(MPC) # works for Julia 1.17.2
-    println("Obj in MPC=",obj)
+    if print
+        println("Obj in MPC=",obj)
+    end
 
     results_T=JuMP.value.(T)
     # println("results_T=",results_T)
@@ -172,8 +176,10 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
     # println("Obj_Q= ",obj_Q)
     # println("Obj_F= ",obj_F)
 
-    println("soln_heat=",results_heat0)
-    println("soln_flow=",results_flow0)
+    if print
+        println("soln_heat=",results_heat0)
+        println("soln_flow=",results_flow0)
+    end
     return results_heat0, results_flow0
 
 end
@@ -186,12 +192,14 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     global N=size(n)[1]
     l=length(dist_time)
     # Check the length of disturbance vectors and dist_time vector are the same
-    if size(Dist_T0)[2] == l
-        println("The length of disturbance variables == the one of dist_time vector=",l)
-    else println("The length of disturbance variables are not equal to the one of dist_time vector")
-        return
+    if print
+        if size(Dist_T0)[2] == l
+            println("The length of disturbance variables == the one of dist_time vector=",l)
+        else println("The length of disturbance variables are not equal to the one of dist_time vector")
+            return
+        end
     end
-    loadProcessData(N,n)
+    loadProcessData(N,n,print=print)
 
     time_steps=round(Int,tmax/dt)
 
@@ -236,12 +244,15 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
         # println("xB=",xBvt[:,tt])
         # println("heat=",heatvt[:,tt])
         # println("flow=",flowvt[:,:,tt])
-        resultsheatvt,resultsflowvt=MPC_solve(n,flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt])
+        resultsheatvt,resultsflowvt=MPC_solve(n,flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
+            heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
         for i=1:N
             heatvt[i,tt+1]=resultsheatvt[i]
             flowvt[i,:,tt+1]=resultsflowvt[i,:]
         end
-        println("count(tt)=",count)
+        if print
+            println("count(tt)=",count)
+        end
 
         for i=1:N
             # println("The disturb has been added for calculating system reactions")
@@ -262,7 +273,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
             end
         end
 
-        newstate=MPC_step_all(T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],heatvt[:,tt+1],flowvt[:,:,tt+1],n,dt)
+        newstate=MPC_step_all(T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],heatvt[:,tt+1],flowvt[:,:,tt+1],n,dt,print=print)
         for aa=0:N-1
             Tvt[aa+1,tt+1]=newstate[3*aa+1]
             xAvt[aa+1,tt+1]=newstate[3*aa+2]
@@ -321,10 +332,18 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
         end
     end
 
-    s = zeros(4)
+    s = zeros(6)
     for t = 2:count
         s += [sum((xBtvt[t] - xBs[1])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N for j=1:N+2),
-                sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N)]
+                sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
+    end
+    s[5] = maximum(Tvt[1,:])
+    epsilon = 0.01 * xBs[1]
+    for i in 1:length(xBtvt)
+        if i > dist_time[1] && xBtvt[i] < xBs[1] + epsilon
+            s[6] = i
+            break
+        end
     end
     return s
     # savefig("3R_1P2S_xBs_0.055_0.055_0.11_DistT3_10_time_8_allprofiles.png")
@@ -363,7 +382,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     # show(stdout, "text/plain", b)
 end
 
-function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt) # Use one ODE solver to solve the whole system
+function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one ODE solver to solve the whole system
     # println("These are the inputs for MPC_step_all")
     # println("T=",T_0)
     # println("Tin=",T0_in)
@@ -392,7 +411,9 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt) # Use one ODE solver t
     prob=ODEProblem(odeodes!,initial_vec,(0.0,dt))
     # prob=ODEProblem(odeodes!,initial_vec,(0.0,20*dt))
     soln=DifferentialEquations.solve(prob,Rosenbrock23())
-    println("Next measurement is: ", last(soln.u))
+    if print
+        println("Next measurement is: ", last(soln.u))
+    end
     return last(soln.u)
     # a=soln.t
     # A=Array(soln)
@@ -465,12 +486,24 @@ function permutate_weights(out_dir, disturbances)
         end
     end
     display(permutation_weights)
-    top_ten = fill(typemax(Float64), (10,10))
+    top_ten = fill(typemax(Float64), (10,12))
 
     num_permutations = 5^5 - 1 # iterate in base 5 through all possible permutations
 
-    for i in ProgressBar(1735:1765)
-    # for i in ProgressBar(0:num_permutations)
+    # normalizing constants make the different fields factor equally into the sums
+    n = 0
+    avg_xB = 0
+    xB_norm_const_test_1 = 11.085 / 1.971e-6
+    xB_norm_const_test_2 = 11.085 / 1.971e-6
+    avg_T = 0
+    avg_flow = 0
+    avg_heat = 0
+    avg_max_xB = 0
+    avg_max_xB_const_test_2 = 10.91 / 0.111299
+
+
+    # for i in ProgressBar(1755:1765)
+    for i in ProgressBar(0:num_permutations)
     # for i in 0:100
         base_five = string(i, base=5, pad=5)
         # println(base_five)
@@ -487,14 +520,26 @@ function permutate_weights(out_dir, disturbances)
         # println(current_weights)
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
         discrepancies = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,q_T,q_xA,q_xB,r_heat,r_flow,90,1000,[8 15];tmax=5000, print=false)
+        n += 1
+        avg_xB += discrepancies[1]
+        avg_T += discrepancies[2]
+        avg_flow += discrepancies[3]
+        avg_heat += discrepancies[4]
+        avg_max_xB += discrepancies[5]
+
         # println("Discrepancies: $discrepancies")
-        sum_discrepancies = sum(discrepancies)
-        m = maximum(top_ten[:,10])
+        # sum_discrepancies = sum(discrepancies) # basic sum
+        # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] # test 1
+        # sum_discrepancies = xB_norm_const_test_2 * discrepancies[1] + discrepancies[2] + avg_max_xB_const_test_2 * discrepancies[5] # test 2
+        # sum_discrepancies = discrepancies[5] # test 3
+        # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] + discrepancies[6] # test 4
+        sum_discrepancies = discrepancies[1] # like test 3 but instead with max temp
+        m = maximum(top_ten[:,12])
         if sum_discrepancies < m
-            insert_index = findall(x -> x==m, top_ten[:,10])[1]
+            insert_index = findall(x -> x==m, top_ten[:,12])[1]
             top_ten[insert_index,1:5] = current_weights
-            top_ten[insert_index,6:9] = discrepancies
-            top_ten[insert_index,10] = sum_discrepancies
+            top_ten[insert_index,6:11] = discrepancies
+            top_ten[insert_index,12] = sum_discrepancies
         end
         # for j in 1:10
         #     # println("$(top_ten[j,10]) $sum_discrepancies")
@@ -509,6 +554,13 @@ function permutate_weights(out_dir, disturbances)
         #     end
         # end
     end
+    println("Average discrepancies")
+    print("xB: $(avg_xB/n)\n")
+    print("T: $(avg_T/n)\n")
+    print("Heat: $(avg_heat/n)\n")
+    print("Flow: $(avg_flow/n)\n")
+    print("max xB: $(avg_max_xB/n)\n")
+
     display(top_ten)
     println("writing top ten configurations to top_ten.txt")
     top_ten_file = out_dir * "\\top_ten.txt"
@@ -517,9 +569,7 @@ function permutate_weights(out_dir, disturbances)
     writedlm(file, top_ten)
     close(file)
 
-    originalDiscrepancy = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
-    print("\nOriginal discrepancy: ")
-    println(originalDiscrepancy[1] + originalDiscrepancy[4])
+    originalDiscrepancy = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000,print=true) # no disturbance
     return top_ten
 end
 
@@ -540,7 +590,7 @@ function save_profile_images(inputMatrix, disturbances, out_dir)
 end
 
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs"
-disturbances = [6 6;0 0]
+disturbances = [10 10;0 0]
 top_ten = permutate_weights(out_dir, disturbances)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
 #                     0.01	100000.0	1.0e11	0.001	1.0e9	0.005476772796985585	214532.18323354874	4.918302353195665e-6	349513.81350522436	0.005476772796985585
@@ -552,7 +602,7 @@ top_ten = permutate_weights(out_dir, disturbances)
 #                     0.01	100000.0	1.0e10	0.001	1.0e8	0.016582382266799704	133381.66374726084	2.601153486813718e-5	2.0605073022839876e6	0.016582382266799704
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images\\"
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
 save_profile_images(top_ten, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
