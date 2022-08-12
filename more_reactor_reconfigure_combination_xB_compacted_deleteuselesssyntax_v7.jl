@@ -6,8 +6,6 @@ using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOp
 function loadProcessData(N::Int,n::Array{Int,2};print=true)
     # global F0=9/3600/N #m^3/s
     global V=0.5/3 #m^3
-    # global T0=[300 300 300] #K
-    global T0=[300 300] #K
     global d_H1=-6e4 #KJ/kmol
     global d_H2=-7e4 #KJ/kmol
     global k1=2.77e3 #s^-1
@@ -20,27 +18,41 @@ function loadProcessData(N::Int,n::Array{Int,2};print=true)
     global R_gas=8.314 #KJ/kmol/K
     global xA0=1
     global xB0=0
+    global Ftest=0.000709
+    # 2R intial condition
+    # global T0=[300 300] #K
+    # global Ts=[388.7;388.7] # will change with different input n and other initial conditions
+    # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
+    # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
+
+    global T0=[300 300 300] #K
+    global Ts=[388.7;388.7;388.7] # will change with different input n and other initial conditions
+    global xBs=[0.11;0.11;0.11] # will change with different input n and other initial conditions
+
+    # 3R P-S initial condition
     # global Ts=[370;370;388.7] # will change with different input n and other initial conditions
     # global xBs=[0.055; 0.055; 0.11] # will change with different input n and other initial conditions
-    global Ts=[388.7;388.7] # will change with different input n and other initial conditions
-    global xBs=[0.11;0.11] # will change with different input n and other initial conditions
-    # global xAs=[1-xBs[1];1-xBs[2];1-xBs[3]] # will change with different input n and other initial conditions
-    global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
+    # global Ts=[367.59;367.59;384.22] # will change with different input n and other initial conditions
+    # global xBs=[0.0283; 0.0283; 0.05541] # will change with different input n and other initial conditions
+    global xAs=[1-xBs[1];1-xBs[2];1-xBs[3]] # will change with different input n and other initial conditions
+
     global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
-    global Flow0=zeros(N,N+2)
-    for i=1:N
-        for j=1:N+2
-            if n[i,j]==1
-                Flow0[i,j]=F0
+    global Flow0=zeros(N+1,N+1)
+    global Q_nom=zeros(N)
+    global F_nom
+    Q_nom,F_nom,ini_lookup=findSS_all(T0,Ts,xBs,n)
+    for k=1:length(ini_lookup)
+        for i=1:N+1
+            for j=1:N+1
+                if ini_lookup[k][1]==i&&ini_lookup[k][2]==j
+                    Flow0[i,j]=F_nom[k]
+                end
             end
         end
     end
-    global Q_nom=zeros(N)
-    global F_nom=zeros(N)
-    Q_nom,F_nom=findSS_all(T0,Ts,xBs,n,Flow0)
-    if print
-        println("Parameters Loaded!")
-    end
+
+    println("Parameters Loaded!")
+
     # println("Q = ", Q_nom," F = ", F_nom)
 end
 
@@ -63,20 +75,28 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
     # println("xA_0=",xA_0)
     # println("xB_0=",xB_0)
 
-    heat_ss=zeros(N)
-    flow_ss=zeros(N)
+    # heat_ss=zeros(N)
+    # flow_ss=zeros(N)
+    # mpclook=zeros()
 
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
-    heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow0)
+    heat_ss,flow_ss,mpclook=findSS_all(T0_in,Ts,xBs,n)
 
-    # println("Heat_ss=",heat_ss)
-    # println("Flow_ss=",flow_ss)
+    println("Heat_ss=",heat_ss)
+    println("Flow_ss=",flow_ss)
+    println(mpclook)
 
-    for i=1:N
-        Flow[i,N+1]=flow_ss[i]
+    for k=1:length(mpclook)
+        for i=1:N+1
+            for j=1:N+1
+                if mpclook[k][1]==i&&mpclook[k][2]==j
+                    Flow[i,j]=flow_ss[k]
+                end
+            end
+        end
     end
-    # println("Flow=",Flow)
+    println("Flow=",Flow)
 
     xA_guess=zeros(N,K+1)
     xB_guess=zeros(N,K+1)
@@ -87,29 +107,30 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         T_guess[i,1]=T_0[i]
     end
     xB_tot_guess=zeros(K+1)
-    xB_tot_guess[1]=sum(n[i,N+2]*Flow0[i,N+2]*xB_guess[i,1] for i=1:N)/sum(n[i,N+2]*Flow0[i,N+2] for i=1:N)
+    xB_tot_guess[1]=sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,1] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
 
     for k=1:K
         for i=1:N
-            T_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow0[j,i]*T_guess[j,k] for j=1:N) + n[i,N+1]*Flow0[i,N+1]*T0_in[i]- sum(n[i,j]*Flow0[i,j]*T_guess[i,k] for j=1:N) - n[i,N+2]*Flow0[i,N+2]*T_guess[i,k]) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V)*dt + T_guess[i,k]
+            T_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i]- sum(n[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V)*dt + T_guess[i,k]
             # println("When k=",k+1," T_guess=",T_guess[:,k+1])
-            xA_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow0[j,i]*xA_guess[j,k] for j=1:N) + n[i,N+1]*Flow0[i,N+1]*xA0 - sum(n[i,j]*Flow0[i,j]*xA_guess[i,k] for j=1:N) - n[i,N+2]*Flow0[i,N+2]*xA_guess[i,k]) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
-            xB_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow0[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow0[i,j]*xB_guess[i,k] for j=1:N) - n[i,N+2]*Flow0[i,N+2]*xB_guess[i,k]) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
+            xA_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
+            xB_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
             # println("When k=",k+1," xB_guess=",xB_guess[:,k+1])
         end
-        xB_tot_guess[k+1] = sum(n[i,N+2]*Flow0[i,N+2]*xB_guess[i,k] for i=1:N)/sum(n[i,N+2]*Flow0[i,N+2] for i=1:N)
+        xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
-    # println("n=",n[:,N+2])
-    # println("Flow[i,N+2]=",Flow[:,N+2])
-    # println("xB_guess=",xB_guess)
-    # println("xBt_guess=",xB_tot_guess)
+    # println("n=",n[:,N+1])
+    # println("Flow[i,N+1]=",Flow[:,N+1])
+    println("xB_guess=",xB_guess)
+    println("xBt_guess=",xB_tot_guess)
 
     JuMP.@variables MPC begin
         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
         Q[i=1:N,k=0:K-1], (lower_bound=0, upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
-        F[i=1:N,j=1:N+2,k=0:K-1], (lower_bound=n[i,j]*0.2*flow_ss[i], upper_bound=n[i,j]*1.8*flow_ss[i],start=Flow[i,j])# Flowrate between reactors
-        # F[i=1:N,j=1:N+2,k=0:K-1;n[i,j]==1], (lower_bound=0.2*flow_ss[i], upper_bound=1.8*flow_ss[i],start=flow_ss[i])# Flowrate between reactors
-        # F[i=1:N,j=1:N+2,k=0:K-1];n[i,j]==0, (lower_bound=0, upper_bound=1e-5,start=0)# Flowrate between reactors
+        # F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=n[i,j]*1.8*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
+        F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
+        # F[i=1:N,j=1:N+1,k=0:K-1;n[i,j]==1], (lower_bound=0.2*flow_ss[i], upper_bound=1.8*flow_ss[i],start=flow_ss[i])# Flowrate between reactors
+        # F[i=1:N,j=1:N+1,k=0:K-1];n[i,j]==0, (lower_bound=0, upper_bound=1e-5,start=0)# Flowrate between reactors
 
         T[i=1:N,k=0:K], (lower_bound=T0[i],upper_bound=2000,start=T_guess[i,k+1])
         xA[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xA_guess[i,k+1])
@@ -123,20 +144,20 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         T_init[i=1:N], T[i,0]==T_0[i]
         xA_init[i=1:N], xA[i,0]==xA_0[i]
         xB_init[i=1:N], xB[i,0]==xB_0[i]
-        xBt_init, xBt[0]==sum(n[i,N+2]*Flow[i,N+2]*xB_0[i] for i=1:N)/sum(n[i,N+2]*Flow[i,N+2] for i=1:N)
-        MassB[i=1:N,k=0:K-1], sum(n[j,i]*F[j,i,k] for j=1:N) + n[i,N+1]*F[i,N+1,k]==sum(n[i,j]*F[i,j,k] for j=1:N) + n[i,N+2]*F[i,N+2,k]
+        xBt_init, xBt[0]==sum(n[i,N+1]*Flow[i,N+1]*xB_0[i] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+        MassB[i=1:N,k=0:K-1], sum(n[j,i]*F[j,i,k] for j=1:N+1)==sum(n[i,j]*F[i,j,k] for j=1:N+1)
     end
 
     @NLconstraints MPC begin
-        Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*T[j,k] for j=1:N) + n[i,N+1]*F[i,N+1,k]*T0_in[i]- sum(n[i,j]*F[i,j,k]*T[i,k] for j=1:N) - n[i,N+2]*F[i,N+2,k]*T[i,k]) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V)*dt + T[i,k]
-        MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xA[j,k] for j=1:N) + n[i,N+1]*F[i,N+1,k]*xA0 - sum(n[i,j]*F[i,j,k]*xA[i,k] for j=1:N) - n[i,N+2]*F[i,N+2,k]*xA[i,k]) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
-        MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N) - n[i,N+2]*F[i,N+2,k]*xB[i,k]) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
-        # OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+2]*F[i,N+2,k]*xB[i,k] for i=1:N)/sum(n[i,N+2]*F[i,N+2,k] for i=1:N)
-        OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+2]*F[i,N+2,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+2]*F[i,N+2,k] for i=1:N)
-        # OutputMoleFraction[k=1:K], xBt[k] == sum(n[i,N+2]*F[i,N+2,k]*xB[i,k] for i=1:N)/sum(n[i,N+2]*F[i,N+2,k] for i=1:N)
+        Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*T[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*T0_in[i]- sum(n[i,j]*F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V)*dt + T[i,k]
+        MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xA[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*xA0 - sum(n[i,j]*F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
+        MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
+        # OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
+        OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
+        # OutputMoleFraction[k=1:K], xBt[k] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
 
-    @objective(MPC,Min,sum(q_T*(T[i,k]-Ts[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBs[1])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2+r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N for j=1:N+2 for k=1:K-1)+sum(r_heat*(Q[i,0]-Q[i,K-1])^2+r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N for j=1:N+2))
+    @objective(MPC,Min,sum(q_T*(T[i,k]-Ts[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBs[1])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
     JuMP.optimize!(MPC)
 
 
@@ -167,7 +188,7 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
     obj_T=sum(q_T*(results_T[i,k]-Ts[i])^2 for i=1:N for k=0:K)
     obj_xBt=sum(q_xB*(results_xBt[k]-xBs[1])^2 for k=0:K)
     obj_Q=sum(r_heat*(results_heat[i,k]-results_heat[i,k-1])^2 for i=1:N for k=1:K-1)+sum(r_heat*(results_heat[i,0]-results_heat[i,K-1])^2 for i=1:N)
-    obj_F=sum(r_flow*(n[i,j]*results_flow[i,j,k]-n[i,j]*results_flow[i,j,k-1])^2 for i=1:N for j=1:N+2 for k=1:K-1)+sum(r_flow*(n[i,j]*results_flow[i,j,0]-n[i,j]*results_flow[i,j,K-1])^2 for i=1:N for j=1:N+2)
+    obj_F=sum(r_flow*(n[i,j]*results_flow[i,j,k]-n[i,j]*results_flow[i,j,k-1])^2 for i=1:N for j=1:N+1 for k=1:K-1)+sum(r_flow*(n[i,j]*results_flow[i,j,0]-n[i,j]*results_flow[i,j,K-1])^2 for i=1:N for j=1:N+1)
 
     # println("results_heat=",results_heat)
     # println("results_flow=",results_flow)
@@ -189,7 +210,8 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     # (runs the moving horizon loop for set point tracking)
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
-    global N=size(n)[1]
+    global N=size(n)[1]-1
+    println("N=",N)
     l=length(dist_time)
     # Check the length of disturbance vectors and dist_time vector are the same
     if print
@@ -218,9 +240,9 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     global xAvt=zeros(N,time_steps+1)
     global xBvt=zeros(N,time_steps+1)
     global heatvt=zeros(N,time_steps+1)
-    global flowvt=zeros(N,N+2,time_steps+1)
+    global flowvt=zeros(N+1,N+1,time_steps+1)
     global xBtvt=zeros(1,time_steps+1)
-    newstate=zeros(N,N)
+    newstate=zeros(3*N)
     # Y=zeros(time_steps+1)
     global T0_invt=zeros(N,time_steps+1)
 
@@ -232,8 +254,8 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     xAvt[:,1]=xAs[:]
     xBvt[:,1]=xBs[:]
     heatvt[:,1]=Q_nom
-    flowvt[:,:,1]=Flow0
-    xBtvt[1]=sum(n[i,N+2]*flowvt[i,N+2,1]*xBvt[i,1] for i=1:N)/sum(n[i,N+2]*flowvt[i,N+2,1] for i=1:N)
+    flowvt[1:N+1,1:N+1,1]=Flow0
+    xBtvt[1]=sum(n[i,N+1]*flowvt[i,N+1,1]*xBvt[i,1] for i=1:N)/sum(n[i,N+1]*flowvt[i,N+1,1] for i=1:N)
     times[1]=0
     tt=1
 
@@ -244,11 +266,13 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
         # println("xB=",xBvt[:,tt])
         # println("heat=",heatvt[:,tt])
         # println("flow=",flowvt[:,:,tt])
+
         resultsheatvt,resultsflowvt=MPC_solve(n,flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
             heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
+
         for i=1:N
             heatvt[i,tt+1]=resultsheatvt[i]
-            flowvt[i,:,tt+1]=resultsflowvt[i,:]
+            flowvt[:,:,tt+1]=resultsflowvt
         end
         if print
             println("count(tt)=",count)
@@ -298,7 +322,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
             end
         end
 
-        xBtvt[tt+1]=sum(n[i,N+2]*flowvt[i,N+2,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(n[i,N+2]*flowvt[i,N+2,tt+1] for i=1:N)
+        xBtvt[tt+1]=sum(n[i,N+1]*flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(n[i,N+1]*flowvt[i,N+1,tt+1] for i=1:N)
         times[tt+1]=times[tt]+dt
         count=count+1
     end
@@ -318,7 +342,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
         p4=plot(times,transpose(heatvt),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="Q (kW)")
         flow_plot=zeros(N,time_steps+1)
         for i=1:N
-            flow_plot[i,:]=flowvt[i,N+1,:]
+            flow_plot[i,:]=flowvt[N+1,i,:]
         end
         p5=plot(times,transpose(flow_plot),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="F (m^3/s)")
         p6=plot(times,transpose(Tvt),xlabel="Time (s)",label=["R1" "R2" "R3"],ylabel="Reactor Temperature")
@@ -334,6 +358,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
 
     s = zeros(6)
     for t = 2:count
+    
         s += [sum((xBtvt[t] - xBs[1])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N for j=1:N+2),
                 sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
     end
@@ -344,6 +369,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
             s[6] = i
             break
         end
+
     end
     return s
     # savefig("3R_1P2S_xBs_0.055_0.055_0.11_DistT3_10_time_8_allprofiles.png")
@@ -382,18 +408,19 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     # show(stdout, "text/plain", b)
 end
 
+
 function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one ODE solver to solve the whole system
     # println("These are the inputs for MPC_step_all")
     # println("T=",T_0)
     # println("Tin=",T0_in)
     # println("xB=",xB_0)
-    # println("heat=",heat)
-    # println("flow=",Flow)
+    println("heat=",heat)
+    println("flow=",Flow)
     function odeodes!(du,u,p,t)
-        for i=0:N-1 # N reactors in total
-            du[3*i+1] = 1/V*(sum(n[j,i+1]*Flow[j,i+1]*u[3*(j-1)+1] for j=1:N) + n[i+1,N+1]*Flow[i+1,N+1]*T0_in[i+1] - sum(n[i+1,j]*Flow[i+1,j]*u[3*i+1] for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*u[3*i+1]) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*i+1])*u[3*i+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*i+1])*u[3*i+3]) + heat[i+1]/rho/c_p/V  # Temperature of the i th reactor
-            du[3*i+2] = 1/V*(sum(n[j,i+1]*Flow[j,i+1]*u[3*(j-1)+2] for j=1:N) + n[i+1,N+1]*Flow[i+1,N+1]*xA0 - sum(n[i+1,j]*Flow[i+1,j]*u[3*i+2] for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*u[3*i+2]) + (-k1*exp(-E1/R_gas/u[3*i+1])*u[3*i+2])
-            du[3*i+3] = 1/V*(sum(n[j,i+1]*Flow[j,i+1]*u[3*(j-1)+3] for j=1:N) - sum(n[i+1,j]*Flow[i+1,j]*u[3*i+3] for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*u[3*i+3]) + k1*exp(-E1/R_gas/u[3*i+1])*u[3*i+2] + (-k2*exp(-E2/R_gas/u[3*i+1])*u[3*i+3])
+        for i=1:N # N reactors in total
+            du[3*(i-1)+1] = 1/V*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+1] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i] - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+1] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3]) + heat[i]/rho/c_p/V  # Temperature of the i th reactor
+            du[3*(i-1)+2] = 1/V*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+2] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+2] for j=1:N+1)) + (-k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])
+            du[3*(i-1)+3] = 1/V*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+3] for j=1:N) - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+3] for j=1:N+1)) + k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2] + (-k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3])
         end
     end
     # u[3*i+1] T
@@ -407,6 +434,7 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
         initial_vec[3*i+2]=xA_0[i+1]
         initial_vec[3*i+3]=xB_0[i+1]
     end
+    println(initial_vec)
 
     prob=ODEProblem(odeodes!,initial_vec,(0.0,dt))
     # prob=ODEProblem(odeodes!,initial_vec,(0.0,20*dt))
@@ -424,56 +452,130 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
 end
 
 # Flows contains the info of all streams that connects
-function findSS_all(T0_in,T_0,xB_0,n,Flow)
-    # assume the connecting flows are constant
-    # println("Here is the function of calculating steady state")
-    # println(T0_in," and ",T_0," and ",xB_0," and ",n," and ",Flow)
-    flow_start=zeros(N)
-    heat_start=zeros(N)
-    for i=0:N-1
-        # flow_start[i+1] = -1/xA0*(sum(n[j,i+1]*Flow[j,i+1]*(1-xB_0[j]) for j=1:N) - sum(n[i+1,j]*Flow[i+1,j]*(1-xB_0[i+1])  for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*(1-xB_0[i+1]) + V*(-k1*exp(-E1/R_gas/T_0[i+1])*(1-xB_0[i+1]))) # assume all reactors must have an input stream
-        # flow_start[i+1] = sum(n[i+1,j]*Flow[i+1,j] for j=1:N) + n[i+1,N+2]*Flow[i+1,N+2] - sum(n[j,i+1]*Flow[j,i+1]*(1-xB_0[j]) for j=1:N)
-        flow_start[i+1] = sum(n[i+1,j]*Flow[i+1,j] for j=1:N) - sum(n[j,i+1]*Flow[j,i+1] for j=1:N) - 1/xB_0[i+1]*(-sum(n[j,i+1]*Flow[j,i+1]*xB_0[j] for j=1:N) + sum(n[i+1,j]*Flow[i+1,j]*xB_0[i+1]  for j=1:N) + V*(-k1*exp(-E1/R_gas/T_0[i+1])*(1-xB_0[i+1])+k2*exp(-E2/R_gas/T_0[i+1])*xB_0[i+1]))
-        heat_start[i+1] = -rho*c_p*V*(1/V*(sum(n[j,i+1]*Flow[j,i+1]*T_0[j] for j=1:N) + n[i+1,N+1]*flow_start[i+1]*T0_in[i+1] - sum(n[i+1,j]*Flow[i+1,j]*T_0[i+1] for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*T_0[i+1]) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i+1])*(1-xB_0[i+1]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i+1])*xB_0[i+1]))
-        # P1=-rho*c_p*(sum(n[j,i+1]*Flow[j,i+1]*T_0[j] for j=1:N))
-        P1=-rho*c_p*(n[i+1,N+1]*flow_start[i+1]*T0_in[i+1])
-        # P2=-rho*c_p*( - sum(n[i+1,j]*Flow[i+1,j]*T_0[i+1] for j=1:N) )
-        P2=-rho*c_p*(-n[i+1,N+2]*(sum(n[j,i+1]*Flow[j,i+1] for j=1:N)+n[i+1,N+1]*flow_start[i+1]-sum(n[i+1,j]*Flow[i+1,j] for j=1:N))*T_0[i+1])
-        P3=-rho*c_p*(-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i+1])*(1-xB_0[i+1]))+-rho*c_p*(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i+1])*xB_0[i+1])
-        # println("In ",i+1, " Reactor, the two part value are ", P1, " and ", P2, " and ", P3)
-    end
-    # println("flow_start=",flow_start)
-    # println("heat_start=",heat_start)
+# function findSS_all(T0_in,T_0,xB_0,n)
+#     # assume there is no spliting
+#     Lookup=findall(isone,n) # find all index of open streams
+#     L=length(Lookup)
+#     flow_start=zeros(L)
+#     flow_start[:].=Ftest
+#     Ttot=zeros(N+1,N)
+#     xBtot=zeros(N+1,N)
+#     for i=1:N+1
+#         if i!=N+1
+#             Ttot[i,:].=T_0[i]
+#             xBtot[i,:].=xB_0[i]
+#         else
+#             for j=1:N
+#                 Ttot[i,j]=T0_in[j]
+#                 xBtot[i,j]=0
+#             end
+#         end
+#     end
+#     # println("FinalT=",Ttot," Length=",length(Ttot))
+#     heat_start=zeros(N)
+#     for i=1:N
+#         heat_start[i] = -rho*c_p*V*(1/V*(sum(flow_start[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(flow_start[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]))
+#         println("i=",i)
+#     end
+#
+#     # initial_vec2=zeros(4*N*(N+4))
+#     initial_vec2=zeros(L + 2*N) # flow+heat+xA
+#
+#     initial_vec2[1:L] = flow_start
+#     initial_vec2[L+1:L+N] = heat_start
+#     initial_vec2[L+N+1:end] = ones(length(xB_0))-xB_0
+#
+#     function f!(du,u)
+#         for i=1:N # N reactors in total
+#             du[4*(i-1)+1] = 1/V*(sum(u[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*u[L+N+i])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]) + u[L+i]/rho/c_p/V
+#             # du[4*(i-1)+2] = 1/V*(sum(u[k]*u[L+N+Lookup[k][1]] for k=1:L if Lookup[k][2]==i&&Lookup[k][1]!=N+1) + sum(u[k]*xA0 for k=1:L if Lookup[k][1]==N+1) - sum(u[k]*u[L+N+i] for k=1:L if Lookup[k][1]==i)) + (-k1*exp(-E1/R_gas/T_0[i])*u[L+N+i])
+#             du[4*(i-1)+2] = 1/V*(sum(u[k]*u[L+N+Lookup[k][1]] for k=1:L if Lookup[k][2]==i) - sum(u[k]*u[L+N+i] for k=1:L if Lookup[k][1]==i)) + (-k1*exp(-E1/R_gas/T_0[i])*u[L+N+i])
+#             du[4*(i-1)+3] = 1/V*(sum(u[k]*xBtot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*xB_0[i] for k=1:L if Lookup[k][1]==i)) + k1*exp(-E1/R_gas/T_0[i])*u[L+N+i] + (-k2*exp(-E2/R_gas/T_0[i])*xB_0[i])
+#             du[4*(i-1)+4] = sum(u[k] for k=1:L if Lookup[k][2]==i) - sum(u[k] for k=1:L if Lookup[k][1]==i)
+#         end
+#     end
+#     # u[1:L] are flow rates
+#     # u[L+1:L+N] is heating rate
+#     # u[L+N+1:end] is xA
+#
+#     soln=nlsolve(f!,initial_vec2)
+#     xA_ss=zeros(N)
+#     heat_ss=zeros(N)
+#     flow_allconnected=zeros(L)
+#     flow_ss=zeros(N)
+#     xA_ss=soln.zero[L+N+1:end]
+#     heat_ss=soln.zero[L+1:L+N]
+#     flow_ss=soln.zero[1:L]
+#     for i=1:N
+#         for k=1:L
+#             if Lookup[k][2]==N+1&&Lookup[k][1]==i
+#                 flow_ss[i]=soln.zero[k]
+#             end
+#         end
+#     end
+#     return heat_ss,flow_ss
+# end
 
-    initial_vec2=zeros(3*N)
-
-    for i=0:N-1
-        initial_vec2[3*i+1]=flow_start[i+1]
-        initial_vec2[3*i+2]=heat_start[i+1]
-        initial_vec2[3*i+3]=1-xB_0[i+1]
-    end
-
-    function f!(du,u)
-        for i=0:N-1 # N reactors in total
-            du[3*i+1] = 1/V*(sum(n[j,i+1]*Flow[j,i+1]*T_0[j] for j=1:N) + n[i+1,N+1]*u[3*i+1]*T0_in[i+1] - sum(n[i+1,j]*Flow[i+1,j]*T_0[i+1] for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*T_0[i+1]) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i+1])*u[3*i+3])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i+1])*xB_0[i+1]) + u[3*i+2]/rho/c_p/V
-            du[3*i+2] = 1/V*(sum(n[j,i+1]*Flow[j,i+1]*u[3*(j-1)+3] for j=1:N) + n[i+1,N+1]*u[3*i+1]*xA0 - sum(n[i+1,j]*Flow[i+1,j]*u[3*i+3] for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*u[3*i+3] + (-k1*exp(-E1/R_gas/u[3*i+1])*u[3*i+3]))
-            du[3*i+3] = 1/V*(sum(n[j,i+1]*Flow[j,i+1]*xB_0[j] for j=1:N) - sum(n[i+1,j]*Flow[i+1,j]*xB_0[i+1] for j=1:N) - n[i+1,N+2]*Flow[i+1,N+2]*xB_0[i+1]) + k1*exp(-E1/R_gas/T_0[i+1])*(1-xB_0[i+1]) + (-k2*exp(-E2/R_gas/T_0[i+1])*xB_0[i+1])
+function findSS_all(T0_in,T_0,xB_0,n)
+    # assume there is no spliting
+    Lookup=findall(isone,n) # find all index of open streams
+    L=length(Lookup)
+    flow_start=zeros(L)
+    flow_start[:].=Ftest
+    Ttot=zeros(N+1,N)
+    xBtot=zeros(N+1,N)
+    for i=1:N+1
+        if i!=N+1
+            Ttot[i,:].=T_0[i]
+            xBtot[i,:].=xB_0[i]
+        else
+            for j=1:N
+                Ttot[i,j]=T0_in[j]
+                xBtot[i,j]=0
+            end
         end
     end
-    # u[3*i+1] is flow rate
-    # u[3*i+2] is heating rate
-    # u[3*i+3] is xA
+    # println("FinalT=",Ttot," Length=",length(Ttot))
+    heat_start=zeros(N)
+    for i=1:N
+        heat_start[i] = -rho*c_p*V*(1/V*(sum(flow_start[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(flow_start[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]))
+        println("i=",i)
+    end
+
+    # initial_vec2=zeros(4*N*(N+4))
+    initial_vec2=zeros(L + N) # flow+heat+xA
+
+    initial_vec2[1:L] = flow_start
+    initial_vec2[L+1:end] = heat_start
+
+    function f!(du,u)
+        for i=1:N # N reactors in total
+            du[3*(i-1)+1] = 1/V*(sum(u[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]) + u[L+i]/rho/c_p/V
+            du[3*(i-1)+2] = 1/V*(sum(u[k]*xBtot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*xB_0[i] for k=1:L if Lookup[k][1]==i)) + k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]) + (-k2*exp(-E2/R_gas/T_0[i])*xB_0[i])
+            du[3*(i-1)+3] = sum(u[k] for k=1:L if Lookup[k][2]==i) - sum(u[k] for k=1:L if Lookup[k][1]==i)
+        end
+    end
+    # u[1:L] are flow rates
+    # u[L+1:L+N] is heating rate
+    # u[L+N+1:end] is xA
 
     soln=nlsolve(f!,initial_vec2)
-    xA_ss=zeros(N)
     heat_ss=zeros(N)
-    flow_ss=zeros(N)
-    for i=0:N-1
-        xA_ss[i+1]=soln.zero[3*i+3]
-        heat_ss[i+1]=soln.zero[3*i+2]
-        flow_ss[i+1]=soln.zero[3*i+1]
-    end
-    return heat_ss,flow_ss
+    flow_allconnected=zeros(L)
+    # flow_ss=zeros(N)
+    flow_ss=soln.zero[1:L]
+    heat_ss=soln.zero[L+1:end]
+    # for i=1:N
+    #     for k=1:L
+    #         if Lookup[k][1]==N+1&&Lookup[k][2]==i
+    #             # println("i=",i," k=",k)
+    #             flow_ss[i]=soln.zero[k]
+    #         end
+    #     end
+    # end
+    # println("Lookup=",Lookup)
+    # println("flow_ss=",flow_ss," and the length =",length(flow_ss))
+    return heat_ss,flow_ss,Lookup
 end
 
 function permutate_weights(out_dir, disturbances)
