@@ -26,12 +26,12 @@ function loadProcessData(N::Int,n::Array{Int,2};print=true)
     # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
 
     global T0=[300 300 300] #K
-    global Ts=[388.7;388.7;388.7] # will change with different input n and other initial conditions
-    global xBs=[0.11;0.11;0.11] # will change with different input n and other initial conditions
+    # global Ts=[388.7;388.7;388.7] # will change with different input n and other initial conditions
+    # global xBs=[0.11;0.11;0.11] # will change with different input n and other initial conditions
 
     # 3R P-S initial condition
-    # global Ts=[370;370;388.7] # will change with different input n and other initial conditions
-    # global xBs=[0.055; 0.055; 0.11] # will change with different input n and other initial conditions
+    global Ts=[370;370;388.7] # will change with different input n and other initial conditions
+    global xBs=[0.055; 0.055; 0.11] # will change with different input n and other initial conditions
     # global Ts=[367.59;367.59;384.22] # will change with different input n and other initial conditions
     # global xBs=[0.0283; 0.0283; 0.05541] # will change with different input n and other initial conditions
     global xAs=[1-xBs[1];1-xBs[2];1-xBs[3]] # will change with different input n and other initial conditions
@@ -85,7 +85,7 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
 
     println("Heat_ss=",heat_ss)
     println("Flow_ss=",flow_ss)
-    println(mpclook)
+    # println(mpclook)
 
     for k=1:length(mpclook)
         for i=1:N+1
@@ -112,15 +112,12 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
     for k=1:K
         for i=1:N
             T_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i]- sum(n[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V)*dt + T_guess[i,k]
-            # println("When k=",k+1," T_guess=",T_guess[:,k+1])
             xA_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
             xB_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
-            # println("When k=",k+1," xB_guess=",xB_guess[:,k+1])
         end
         xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
-    # println("n=",n[:,N+1])
-    # println("Flow[i,N+1]=",Flow[:,N+1])
+
     println("xB_guess=",xB_guess)
     println("xBt_guess=",xB_tot_guess)
 
@@ -128,10 +125,8 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
         Q[i=1:N,k=0:K-1], (lower_bound=0, upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
         # F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=n[i,j]*1.8*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
-        F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
-        # F[i=1:N,j=1:N+1,k=0:K-1;n[i,j]==1], (lower_bound=0.2*flow_ss[i], upper_bound=1.8*flow_ss[i],start=flow_ss[i])# Flowrate between reactors
-        # F[i=1:N,j=1:N+1,k=0:K-1];n[i,j]==0, (lower_bound=0, upper_bound=1e-5,start=0)# Flowrate between reactors
-
+        F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=n[i,j]*(1+Flow[i,j]),start=Flow[i,j])# Flowrate between reactors
+        # F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
         T[i=1:N,k=0:K], (lower_bound=T0[i],upper_bound=2000,start=T_guess[i,k+1])
         xA[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xA_guess[i,k+1])
         xB[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xB_guess[i,k+1])
@@ -152,12 +147,10 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*T[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*T0_in[i]- sum(n[i,j]*F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V)*dt + T[i,k]
         MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xA[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*xA0 - sum(n[i,j]*F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
         MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
-        # OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
-        # OutputMoleFraction[k=1:K], xBt[k] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
 
-    @objective(MPC,Min,sum(q_T*(T[i,k]-Ts[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBs[1])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    @objective(MPC,Min,sum(q_T*(T[i,k]-Ts[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBs[3])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
     JuMP.optimize!(MPC)
 
 
@@ -358,8 +351,8 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
 
     s = zeros(6)
     for t = 2:count
-    
-        s += [sum((xBtvt[t] - xBs[1])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N for j=1:N+2),
+
+        s += [sum((xBtvt[t] - xBs[1])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1),
                 sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
     end
     s[5] = maximum(Tvt[1,:])
