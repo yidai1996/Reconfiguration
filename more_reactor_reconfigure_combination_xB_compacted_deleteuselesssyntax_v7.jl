@@ -3,7 +3,7 @@
 
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
 
-function loadProcessData(N::Int,n::Array{Int,2};print=true)
+function loadProcessData(N::Int,n::Array{Int,2};print=true, initial_values=[300,388.7,0.11])
     # global F0=9/3600/N #m^3/s
     global V=0.5/3 #m^3
     global d_H1=-6e4 #KJ/kmol
@@ -25,10 +25,11 @@ function loadProcessData(N::Int,n::Array{Int,2};print=true)
     # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
     # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
 
-    global T0=[300 300 300 300] #K
-    global Ts=[388.7;388.7;388.7;388.7] # will change with different input n and other initial conditions
-    global xBs=[0.11;0.11;0.11; 0.11] # will change with different input n and other initial conditions
-    global xAs=[1-xBs[1];1-xBs[2];1-xBs[3];1-xBs[4]] # will change with different input n and other initial conditions
+
+    global T0=fill(initial_values[1],N) #K
+    global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
+    global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
+    global xAs=fill(1-xBs[1],N) # will change with different input n and other initial conditions
 
     # 3R P-S initial condition
     # global Ts=[370;370;388.7] # will change with different input n and other initial conditions
@@ -691,9 +692,10 @@ function save_profile_images(inputMatrix, disturbances, out_dir)
     end
 end
 
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\4R Systems\\"
-disturbances = [10 10; 0 0; 0 0; 0 0]
-adjacent = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\3R Systems\\"
+adjacent = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+disturbances = [0 0; 0 0; 10 10]
+#TODO make graph not say R1 for the fourth reactor
 MPC_tracking(adjacent, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000, save_plots=true, plot_name=out_dir * "plots.png")
 # top_ten = permutate_weights(out_dir, disturbances)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
