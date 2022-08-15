@@ -4,3 +4,9 @@ MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],1,1e7,1e7,1e-5,
 3R mixing
 MPC_tracking([0 0 1 0; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],1,1e7,1e7,1e-5,1e7,90,1000,[8 15];tmax=5000)
 
+4R Parallel
+adjacent = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
+disturbances = [0 0; 0 0; 0 0; 0 0]
+MPC_tracking(adjacent, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000)
+
+
