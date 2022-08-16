@@ -2,8 +2,9 @@
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
+include("permutation.jl")
 
-function loadProcessData(N::Int,n::Array{Int,2};print=true, initial_values=[300,388.7,0.11])
+function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global F0=9/3600/N #m^3/s
     global V=0.5/3 #m^3
     global d_H1=-6e4 #KJ/kmol
@@ -41,7 +42,7 @@ function loadProcessData(N::Int,n::Array{Int,2};print=true, initial_values=[300,
     global Flow0=zeros(N+1,N+1)
     global Q_nom=zeros(N)
     global F_nom
-    Q_nom,F_nom,ini_lookup=findSS_all(T0,Ts,xBs,n)
+    Q_nom,F_nom,ini_lookup=findSS_all(T0,Ts,xBs,n,print=print)
     for k=1:length(ini_lookup)
         for i=1:N+1
             for j=1:N+1
@@ -52,7 +53,9 @@ function loadProcessData(N::Int,n::Array{Int,2};print=true, initial_values=[300,
         end
     end
 
-    println("Parameters Loaded!")
+    if print
+        println("Parameters Loaded!")
+    end
 
     # println("Q = ", Q_nom," F = ", F_nom)
 end
@@ -82,11 +85,13 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
 
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
-    heat_ss,flow_ss,mpclook=findSS_all(T0_in,Ts,xBs,n)
+    heat_ss,flow_ss,mpclook=findSS_all(T0_in,Ts,xBs,n,print=print)
 
-    println("Heat_ss=",heat_ss)
-    println("Flow_ss=",flow_ss)
-    println(mpclook)
+    if print
+        println("Heat_ss=",heat_ss)
+        println("Flow_ss=",flow_ss)
+        println(mpclook)
+    end
 
     for k=1:length(mpclook)
         for i=1:N+1
@@ -97,7 +102,9 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
             end
         end
     end
-    println("Flow=",Flow)
+    if print
+        println("Flow=",Flow)
+    end
 
     xA_guess=zeros(N,K+1)
     xB_guess=zeros(N,K+1)
@@ -122,8 +129,10 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
     end
     # println("n=",n[:,N+1])
     # println("Flow[i,N+1]=",Flow[:,N+1])
-    println("xB_guess=",xB_guess)
-    println("xBt_guess=",xB_tot_guess)
+    if print
+        println("xB_guess=",xB_guess)
+        println("xBt_guess=",xB_tot_guess)
+    end
 
     JuMP.@variables MPC begin
         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
@@ -207,12 +216,14 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
 end
 
 function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
-    dist_time;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
+    dist_time;tmax=200,print=true,save_plots=false,plot_name="all_plots.png",initial_values=[300,388.7,0.11]) # This is for continous disturbance on the (unstable) input temperature
     # (runs the moving horizon loop for set point tracking)
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
     global N=size(n)[1]-1
-    println("N=",N)
+    if print
+        println("N=",N)
+    end
     l=length(dist_time)
     # Check the length of disturbance vectors and dist_time vector are the same
     if print
@@ -222,7 +233,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
             return
         end
     end
-    loadProcessData(N,n,print=print)
+    loadProcessData(N,n,initial_values,print=print)
 
     time_steps=round(Int,tmax/dt)
 
@@ -336,17 +347,20 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     # for i=1:N
     #     display(p[i])
     # end
+
+     # have to reshape because plot accepts a matrix not a vector, also must be 1xN not Nx1
+    label = reshape(["R$i" for i in 1:N],1,N)
     if print || save_plots
-        p1=plot(times,transpose(T0_invt),xlabel="Time (s)",label=["R1" "R2" "R3"],ylabel="Input Temperature")
-        p2=plot(times,transpose(xBvt),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="Individual xB")
+        p1=plot(times,transpose(T0_invt),xlabel="Time (s)",label=label,ylabel="Input Temperature")
+        p2=plot(times,transpose(xBvt),xlabel="Time (s)", label=label,ylabel="Individual xB")
         p3=plot(times,transpose(xBtvt),xlabel="Time (s)", label=false,ylabel="Final Output xB(xB3)")
-        p4=plot(times,transpose(heatvt),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="Q (kW)")
+        p4=plot(times,transpose(heatvt),xlabel="Time (s)", label=label,ylabel="Q (kW)")
         flow_plot=zeros(N,time_steps+1)
         for i=1:N
             flow_plot[i,:]=flowvt[N+1,i,:]
         end
-        p5=plot(times,transpose(flow_plot),xlabel="Time (s)", label=["R1" "R2" "R3"],ylabel="F (m^3/s)")
-        p6=plot(times,transpose(Tvt),xlabel="Time (s)",label=["R1" "R2" "R3"],ylabel="Reactor Temperature")
+        p5=plot(times,transpose(flow_plot),xlabel="Time (s)", label=label,ylabel="F (m^3/s)")
+        p6=plot(times,transpose(Tvt),xlabel="Time (s)",label=label,ylabel="Reactor Temperature")
         p_all=plot(p1,p2,p3,p4,p5,p6,layout=(2,3),xtickfontsize=6,ytickfontsize=6,xguidefontsize=8,yguidefontsize=8)
         if print
             display(p_all)
@@ -415,8 +429,10 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
     # println("T=",T_0)
     # println("Tin=",T0_in)
     # println("xB=",xB_0)
-    println("heat=",heat)
-    println("flow=",Flow)
+    if print
+        println("heat=",heat)
+        println("flow=",Flow)
+    end
     function odeodes!(du,u,p,t)
         for i=1:N # N reactors in total
             du[3*(i-1)+1] = 1/V*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+1] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i] - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+1] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3]) + heat[i]/rho/c_p/V  # Temperature of the i th reactor
@@ -435,7 +451,9 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
         initial_vec[3*i+2]=xA_0[i+1]
         initial_vec[3*i+3]=xB_0[i+1]
     end
-    println(initial_vec)
+    if print
+        println(initial_vec)
+    end
 
     prob=ODEProblem(odeodes!,initial_vec,(0.0,dt))
     # prob=ODEProblem(odeodes!,initial_vec,(0.0,20*dt))
@@ -517,7 +535,7 @@ end
 #     return heat_ss,flow_ss
 # end
 
-function findSS_all(T0_in,T_0,xB_0,n)
+function findSS_all(T0_in,T_0,xB_0,n;print=true)
     # assume there is no spliting
     Lookup=findall(isone,n) # find all index of open streams
     L=length(Lookup)
@@ -540,7 +558,9 @@ function findSS_all(T0_in,T_0,xB_0,n)
     heat_start=zeros(N)
     for i=1:N
         heat_start[i] = -rho*c_p*V*(1/V*(sum(flow_start[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(flow_start[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]))
-        println("i=",i)
+        if print
+            println("i=",i)
+        end
     end
 
     # initial_vec2=zeros(4*N*(N+4))
@@ -579,125 +599,15 @@ function findSS_all(T0_in,T_0,xB_0,n)
     return heat_ss,flow_ss,Lookup
 end
 
-function permutate_weights(out_dir, disturbances)
-    original_weights = [1,1e7,1e7,1e-5,1e7]
-    powers_each_side = 2
-    permutation_weights = zeros(Float64, (2*powers_each_side + 1,length(original_weights)))
-    for i in 1:(2*powers_each_side + 1)
-        for j in 1:length(original_weights)
-            permutation_weights[i,j] = original_weights[j]*exp10(i - (powers_each_side + 1))
-        end
-    end
-    display(permutation_weights)
-    top_ten = fill(typemax(Float64), (10,12))
 
-    num_permutations = 5^5 - 1 # iterate in base 5 through all possible permutations
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
+adjacencies = [0 0 1; 0 0 1; 1 1 0]
+disturbances = [10 10; 0 0]
 
-    # normalizing constants make the different fields factor equally into the sums
-    n = 0
-    avg_xB = 0
-    xB_norm_const_test_1 = 11.085 / 1.971e-6
-    xB_norm_const_test_2 = 11.085 / 1.971e-6
-    avg_T = 0
-    avg_flow = 0
-    avg_heat = 0
-    avg_max_xB = 0
-    avg_max_xB_const_test_2 = 10.91 / 0.111299
-
-
-    # for i in ProgressBar(1755:1765)
-    for i in ProgressBar(0:num_permutations)
-    # for i in 0:100
-        base_five = string(i, base=5, pad=5)
-        # println(base_five)
-        current_weights = original_weights
-        for j in 1:length(base_five)
-            char = base_five[j]
-            current_weights[j] = permutation_weights[parse(Int64, char) + 1, j]
-        end
-        q_T = current_weights[1]
-        q_xA = current_weights[2]
-        q_xB = current_weights[3]
-        r_heat = current_weights[4]
-        r_flow = current_weights[5]
-        # println(current_weights)
-        # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        discrepancies = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,q_T,q_xA,q_xB,r_heat,r_flow,90,1000,[8 15];tmax=5000, print=false)
-        n += 1
-        avg_xB += discrepancies[1]
-        avg_T += discrepancies[2]
-        avg_flow += discrepancies[3]
-        avg_heat += discrepancies[4]
-        avg_max_xB += discrepancies[5]
-
-        # println("Discrepancies: $discrepancies")
-        # sum_discrepancies = sum(discrepancies) # basic sum
-        # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] # test 1
-        # sum_discrepancies = xB_norm_const_test_2 * discrepancies[1] + discrepancies[2] + avg_max_xB_const_test_2 * discrepancies[5] # test 2
-        # sum_discrepancies = discrepancies[5] # test 3
-        # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] + discrepancies[6] # test 4
-        sum_discrepancies = discrepancies[1] # like test 3 but instead with max temp
-        m = maximum(top_ten[:,12])
-        if sum_discrepancies < m
-            insert_index = findall(x -> x==m, top_ten[:,12])[1]
-            top_ten[insert_index,1:5] = current_weights
-            top_ten[insert_index,6:11] = discrepancies
-            top_ten[insert_index,12] = sum_discrepancies
-        end
-        # for j in 1:10
-        #     # println("$(top_ten[j,10]) $sum_discrepancies")
-        #     is_full = maximum(top_ten[:,10]) != Inf
-        #     # println("$(top_ten[:,10]) $is_full")
-        #     if top_ten[j,10] > sum_discrepancies
-        #         !is_full && top_ten[j,10] != Inf && continue
-        #         top_ten[insert_index,1:5] = current_weights
-        #         top_ten[insert_index,6:9] = discrepancies
-        #         top_ten[insert_index,10] = sum_discrepancies
-        #         break
-        #     end
-        # end
-    end
-    println("Average discrepancies")
-    print("xB: $(avg_xB/n)\n")
-    print("T: $(avg_T/n)\n")
-    print("Heat: $(avg_heat/n)\n")
-    print("Flow: $(avg_flow/n)\n")
-    print("max xB: $(avg_max_xB/n)\n")
-
-    display(top_ten)
-    println("writing top ten configurations to top_ten.txt")
-    top_ten_file = out_dir * "\\top_ten.txt"
-    touch(top_ten_file)
-    file = open(top_ten_file, "w")
-    writedlm(file, top_ten)
-    close(file)
-
-    originalDiscrepancy = MPC_tracking([0 0 1 1;0 0 1 1], disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000,print=true) # no disturbance
-    return top_ten
-end
-
-function save_profile_images(inputMatrix, disturbances, out_dir)
-    count = 1
-    for row in eachrow(inputMatrix)
-        println(row)
-        q_T = row[1]
-        q_xA = row[2]
-        q_xB = row[3]
-        r_heat = row[4]
-        r_flow = row[5]
-        image_name = join(row[1:5], "_")
-        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
-        MPC_tracking([0 0 1 1;0 0 1 1], disturbances,q_T,q_xA,q_xB,r_heat,r_flow,90,1000,[8 15];tmax=5000, print=false, save_plots=true, plot_name=image_name)
-        count += 1
-    end
-end
-
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\3R Systems\\"
-adjacent = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-disturbances = [0 0; 0 0; 10 10]
-#TODO make graph not say R1 for the fourth reactor
-MPC_tracking(adjacent, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000, save_plots=true, plot_name=out_dir * "plots.png")
+# MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
+    # ;tmax=5000, save_plots=true, plot_name="plots.png",initial_values=[300,388.7,0.7])
 # top_ten = permutate_weights(out_dir, disturbances)
+top_ten = permutate_initial_conditions(out_dir, adjacencies, disturbances)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
 #                     0.01	100000.0	1.0e11	0.001	1.0e9	0.005476772796985585	214532.18323354874	4.918302353195665e-6	349513.81350522436	0.005476772796985585
 #                     0.01	100000.0	1.0e10	1.0000000000000002e-6	1.0e9	0.007322597410352353	109371.49364775658	3.485568289844138e-5	2.62339968185887e6	0.007322597410352353
@@ -708,8 +618,8 @@ MPC_tracking(adjacent, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000,
 #                     0.01	100000.0	1.0e10	0.001	1.0e8	0.016582382266799704	133381.66374726084	2.601153486813718e-5	2.0605073022839876e6	0.016582382266799704
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
-# save_profile_images(top_ten, disturbances, out_dir)
+# out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
+save_profile_images_initial_conditions(top_ten, adjacencies, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R
