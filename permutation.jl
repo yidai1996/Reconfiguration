@@ -117,7 +117,7 @@ function save_profile_images_permutations(inputMatrix, disturbances, out_dir)
 end
 
 function permutate_initial_conditions(out_dir, adjacencies, disturbances)
-    original_values = [300,388.7,0.5]
+    original_values = [300,388.7,0.11]
     steps_each_side = 2
     step_size = [0,25,0.2]
     permutation_weights = zeros(Float64, (2*steps_each_side + 1,length(original_values)))
