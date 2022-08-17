@@ -117,9 +117,10 @@ function save_profile_images_permutations(inputMatrix, disturbances, out_dir)
 end
 
 function permutate_initial_conditions(out_dir, adjacencies, disturbances)
+    # TODO make for n 3 reactor system, output 25x10 s file
     original_values = [300,388.7,0.11]
     steps_each_side = 2
-    step_size = [0,25,0.2]
+    step_size = [0,10,0.05]
     permutation_weights = zeros(Float64, (2*steps_each_side + 1,length(original_values)))
     for i in 1:(2*steps_each_side + 1)
         for j in 1:length(original_values)
@@ -200,6 +201,8 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
     print("Heat: $(avg_heat/n)\n")
     print("Flow: $(avg_flow/n)\n")
     print("max xB: $(avg_max_xB/n)\n")
+    # TODO make column labels
+    # TODO output to xlsx file not txt file
 
     display(top_ten)
     println("writing top ten configurations to top_ten.txt")

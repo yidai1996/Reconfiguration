@@ -26,11 +26,11 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
     # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
 
-    # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
-    global T0=fill(initial_values[1],N) #K
-    global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
-    global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
-    global xAs=fill(1-xBs[1],N) # will change with different input n and other initial conditions
+    # TODO initial value matrix nxm: n is number of reactors and m is 3 (T0,Ts,xBs)
+    global T0=initial_values[:,1] #K
+    global Ts=initial_values[:,2] # will change with different input n and other initial conditions
+    global xBs=initial_values[:,3] # will change with different input n and other initial conditions
+    global xAs=1 .- xBs # will change with different input n and other initial conditions
 
     # 3R P-S initial condition
     # global Ts=[370;370;388.7] # will change with different input n and other initial conditions
