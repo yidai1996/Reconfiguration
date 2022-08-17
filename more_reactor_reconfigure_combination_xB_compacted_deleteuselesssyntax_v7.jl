@@ -26,7 +26,7 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
     # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
 
-
+    # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
     global T0=fill(initial_values[1],N) #K
     global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
     global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
@@ -604,10 +604,10 @@ out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\
 adjacencies = [0 0 1; 0 0 1; 1 1 0]
 disturbances = [10 10; 0 0]
 
-# MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
-    # ;tmax=5000, save_plots=true, plot_name="plots.png",initial_values=[300,388.7,0.7])
+MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
+    ;tmax=5000, initial_values=[300,388.7,0.7])
 # top_ten = permutate_weights(out_dir, disturbances)
-top_ten = permutate_initial_conditions(out_dir, adjacencies, disturbances)
+# top_ten = permutate_initial_conditions(out_dir, adjacencies, disturbances)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
 #                     0.01	100000.0	1.0e11	0.001	1.0e9	0.005476772796985585	214532.18323354874	4.918302353195665e-6	349513.81350522436	0.005476772796985585
 #                     0.01	100000.0	1.0e10	1.0000000000000002e-6	1.0e9	0.007322597410352353	109371.49364775658	3.485568289844138e-5	2.62339968185887e6	0.007322597410352353
@@ -619,7 +619,7 @@ top_ten = permutate_initial_conditions(out_dir, adjacencies, disturbances)
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
-save_profile_images_initial_conditions(top_ten, adjacencies, disturbances, out_dir)
+# save_profile_images_initial_conditions(top_ten, adjacencies, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R
