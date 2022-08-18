@@ -221,7 +221,6 @@ end
 function save_profile_images_initial_conditions(inputMatrix, adjacencies, disturbances, out_dir)
     count = 1
     for row in eachrow(inputMatrix)
-        println(row)
         T0 = row[1]
         Ts = row[2]
         xBs = row[3]
@@ -229,8 +228,6 @@ function save_profile_images_initial_conditions(inputMatrix, adjacencies, distur
         image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
         N = size(adjacencies)[1] - 1
         original_values = repeat([300 388.7 0.11],N)
-        println(original_values)
-        println(row[1:3])
         initial_values = original_values .+ transpose(row[1:3])
         MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000, print=false, save_plots=true, plot_name=image_name,initial_values=initial_values)
         count += 1
