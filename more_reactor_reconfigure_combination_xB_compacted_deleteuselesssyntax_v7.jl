@@ -5,7 +5,9 @@ using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOp
 
 function loadProcessData(N::Int,n::Array{Int,2};print=true)
     # global F0=9/3600/N #m^3/s
-    global V=0.5/3 #m^3
+    global Vlittle=0.5/3
+    global V=[Vlittle Vlittle Vlittle 0.5] #m^3
+    # global V=0.5/3 #m^3
     global d_H1=-6e4 #KJ/kmol
     global d_H2=-7e4 #KJ/kmol
     global k1=2.77e3 #s^-1
@@ -18,25 +20,30 @@ function loadProcessData(N::Int,n::Array{Int,2};print=true)
     global R_gas=8.314 #KJ/kmol/K
     global xA0=1
     global xB0=0
-    global Ftest=0.000709
+    # global Ftest=0.000709
+    global Ftest=0.000709 # For 4R
     # 2R intial condition
     # global T0=[300 300] #K
     # global Ts=[388.7;388.7] # will change with different input n and other initial conditions
     # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
     # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
 
-    global T0=[300 300 300] #K
-    # global Ts=[388.7;388.7;388.7] # will change with different input n and other initial conditions
-    # global xBs=[0.11;0.11;0.11] # will change with different input n and other initial conditions
-
-    # 3R P-S initial condition
-    global Ts=[370;370;388.7] # will change with different input n and other initial conditions
-    global xBs=[0.055; 0.055; 0.11] # will change with different input n and other initial conditions
+    # global T0=[300 300 300] #K
+    # # 3R P-S initial condition
+    # global Ts=[370;370;388.7] # will change with different input n and other initial conditions
+    # global xBs=[0.055; 0.055; 0.11] # will change with different input n and other initial conditions
     # global Ts=[367.59;367.59;384.22] # will change with different input n and other initial conditions
     # global xBs=[0.0283; 0.0283; 0.05541] # will change with different input n and other initial conditions
-    global xAs=[1-xBs[1];1-xBs[2];1-xBs[3]] # will change with different input n and other initial conditions
+    # global Ts=[370;388.7;388.7] # will change with different input n and other initial conditions
+    # global xBs=[0.055; 0.11; 0.11] # will change with different input n and other initial conditions
+    # global xAs=[1-xBs[1];1-xBs[2];1-xBs[3]] # will change with different input n and other initial conditions
+    # 4R
+    global T0=[300 300 300 300] #K
+    global Ts=[370; 370; 370; 388.7] # will change with different input n and other initial conditions
+    global xBs=[0.055; 0.055; 0.055; 0.11] # will change with different input n and other initial conditions
+    global xAs=[1-xBs[1];1-xBs[2];1-xBs[3];1-xBs[4]] # will change with different input n and other initial conditions
 
-    global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
+    # global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
     global Flow0=zeros(N+1,N+1)
     global Q_nom=zeros(N)
     global F_nom
@@ -91,7 +98,10 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         for i=1:N+1
             for j=1:N+1
                 if mpclook[k][1]==i&&mpclook[k][2]==j
-                    Flow[i,j]=flow_ss[k]
+                    if flow_ss[k]<0
+                        Flow[i,j]=0
+                    else  Flow[i,j]=flow_ss[k]
+                    end
                 end
             end
         end
@@ -111,9 +121,9 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
 
     for k=1:K
         for i=1:N
-            T_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i]- sum(n[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V)*dt + T_guess[i,k]
-            xA_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
-            xB_guess[i,k+1] = (1/V*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
+            T_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i]- sum(n[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V[i])*dt + T_guess[i,k]
+            xA_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
+            xB_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
         end
         xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
@@ -144,9 +154,9 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
     end
 
     @NLconstraints MPC begin
-        Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*T[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*T0_in[i]- sum(n[i,j]*F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V)*dt + T[i,k]
-        MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xA[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*xA0 - sum(n[i,j]*F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
-        MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
+        Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*T[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*T0_in[i]- sum(n[i,j]*F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V[i])*dt + T[i,k]
+        MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xA[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*xA0 - sum(n[i,j]*F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
+        MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
 
@@ -411,9 +421,9 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
     println("flow=",Flow)
     function odeodes!(du,u,p,t)
         for i=1:N # N reactors in total
-            du[3*(i-1)+1] = 1/V*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+1] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i] - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+1] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3]) + heat[i]/rho/c_p/V  # Temperature of the i th reactor
-            du[3*(i-1)+2] = 1/V*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+2] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+2] for j=1:N+1)) + (-k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])
-            du[3*(i-1)+3] = 1/V*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+3] for j=1:N) - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+3] for j=1:N+1)) + k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2] + (-k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3])
+            du[3*(i-1)+1] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+1] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i] - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+1] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3]) + heat[i]/rho/c_p/V[i]  # Temperature of the i th reactor
+            du[3*(i-1)+2] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+2] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+2] for j=1:N+1)) + (-k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])
+            du[3*(i-1)+3] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+3] for j=1:N) - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+3] for j=1:N+1)) + k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2] + (-k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3])
         end
     end
     # u[3*i+1] T
@@ -511,8 +521,11 @@ end
 
 function findSS_all(T0_in,T_0,xB_0,n)
     # assume there is no spliting
+    # TODO negative flowrate occurs for the mixing reactor with n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 1 0]
+    # TODO BoundErrors occur if n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 0 0]
     Lookup=findall(isone,n) # find all index of open streams
     L=length(Lookup)
+    println("L=",L)
     flow_start=zeros(L)
     flow_start[:].=Ftest
     Ttot=zeros(N+1,N)
@@ -531,8 +544,8 @@ function findSS_all(T0_in,T_0,xB_0,n)
     # println("FinalT=",Ttot," Length=",length(Ttot))
     heat_start=zeros(N)
     for i=1:N
-        heat_start[i] = -rho*c_p*V*(1/V*(sum(flow_start[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(flow_start[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]))
-        println("i=",i)
+        heat_start[i] = -rho*c_p*V[i]*(1/V[i]*(sum(flow_start[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(flow_start[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i])) + (-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]))
+        # println("i=",i)
     end
 
     # initial_vec2=zeros(4*N*(N+4))
@@ -543,8 +556,8 @@ function findSS_all(T0_in,T_0,xB_0,n)
 
     function f!(du,u)
         for i=1:N # N reactors in total
-            du[3*(i-1)+1] = 1/V*(sum(u[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]) + u[L+i]/rho/c_p/V
-            du[3*(i-1)+2] = 1/V*(sum(u[k]*xBtot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*xB_0[i] for k=1:L if Lookup[k][1]==i)) + k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]) + (-k2*exp(-E2/R_gas/T_0[i])*xB_0[i])
+            du[3*(i-1)+1] = 1/V[i]*(sum(u[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]) + u[L+i]/rho/c_p/V[i]
+            du[3*(i-1)+2] = 1/V[i]*(sum(u[k]*xBtot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*xB_0[i] for k=1:L if Lookup[k][1]==i)) + k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]) + (-k2*exp(-E2/R_gas/T_0[i])*xB_0[i])
             du[3*(i-1)+3] = sum(u[k] for k=1:L if Lookup[k][2]==i) - sum(u[k] for k=1:L if Lookup[k][1]==i)
         end
     end
@@ -568,6 +581,12 @@ function findSS_all(T0_in,T_0,xB_0,n)
     # end
     # println("Lookup=",Lookup)
     # println("flow_ss=",flow_ss," and the length =",length(flow_ss))
+    for i=1:L
+        if flow_ss[i]<0
+            println("flow_ss=",flow_ss)
+            error("Negative flowrate occurs")
+        end
+    end
     return heat_ss,flow_ss,Lookup
 end
 
