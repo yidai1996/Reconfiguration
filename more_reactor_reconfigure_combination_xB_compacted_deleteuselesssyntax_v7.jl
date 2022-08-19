@@ -29,12 +29,11 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
     # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
 
-
-    # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
-    global T0=fill(initial_values[1],N) #K
-    global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
-    global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
-    global xAs=fill(1-xBs[1],N) # will change with different input n and other initial conditions
+    # TODO initial value matrix nxm: n is number of reactors and m is 3 (T0,Ts,xBs)
+    global T0=initial_values[:,1] #K
+    global Ts=initial_values[:,2] # will change with different input n and other initial conditions
+    global xBs=initial_values[:,3] # will change with different input n and other initial conditions
+    global xAs=1 .- xBs # will change with different input n and other initial conditions
 
     global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
     global Flow0=zeros(N+1,N+1)
@@ -211,7 +210,7 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
 end
 
 function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
-    dist_time;tmax=200,print=true,save_plots=false,plot_name="all_plots.png",initial_values=[300,388.7,0.11]) # This is for continous disturbance on the (unstable) input temperature
+    dist_time,initial_values;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
     # (runs the moving horizon loop for set point tracking)
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
@@ -602,12 +601,13 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
 end
 
 
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-adjacencies = [0 0 1; 0 0 1; 1 1 0]
-disturbances = [10 10; 0 0]
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Reactor Performance\\4R Systems\\"
+adjacencies = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
+disturbances = [0 0;0 0;0 0;10 10]
+initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
-MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
-    ;tmax=5000, initial_values=[300,388.7,0.7])
+MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
+    initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
 # top_ten = permutate_weights(out_dir, disturbances)
 # top_ten = permutate_initial_conditions(out_dir, adjacencies, disturbances)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6

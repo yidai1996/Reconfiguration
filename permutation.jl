@@ -117,19 +117,25 @@ function save_profile_images_permutations(inputMatrix, disturbances, out_dir)
 end
 
 function permutate_initial_conditions(out_dir, adjacencies, disturbances)
-    original_values = [300,388.7,0.11]
+    # TODO maybe have user input initial conditions
+    # TODO make for n reactor system, output 25x10 s file for 2 and 3 reactors
+    N = size(adjacencies)[1] - 1
+    # Nxm matrix where N is number of reactors and m is number of initial conditions
+    original_values = repeat([300 388.7 0.11],N)
     steps_each_side = 2
-    step_size = [0,25,0.2]
-    permutation_weights = zeros(Float64, (2*steps_each_side + 1,length(original_values)))
-    for i in 1:(2*steps_each_side + 1)
-        for j in 1:length(original_values)
-            permutation_weights[i,j] = original_values[j] + ((i - (steps_each_side + 1)) * step_size[j])
+    step_size = [0,10,0.05]
+    permutation_weights = zeros(Float64, (2*steps_each_side + 1,size(original_values)[2],N))
+    for n in 1:N
+        for i in 1:(2*steps_each_side + 1)
+            for j in 1:size(original_values)[2]
+                permutation_weights[i,j,n] = original_values[n,j] + ((i - (steps_each_side + 1)) * step_size[j])
+            end
         end
     end
     display(permutation_weights)
     top_ten = fill(0.0, (10,10))
 
-    num_permutations = 5^(length(original_values)) - 1 # iterate in base 5 through all possible permutations
+    num_permutations = 5^(size(original_values)[2]) - 1 # iterate in base 5 through all possible permutations
 
     # normalizing constants make the different fields factor equally into the sums
     n = 0
@@ -145,18 +151,16 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
     # for i in ProgressBar(10:20)
     for i in ProgressBar(0:num_permutations)
     # for i in 0:100
-        base_five = string(i, base=5, pad=length(original_values))
+        base_five = string(i, base=5, pad=size(original_values)[1])
         # println(base_five)
-        current_values = original_values
-        for j in 1:length(base_five)
-            char = base_five[j]
-            current_values[j] = permutation_weights[parse(Int64, char) + 1, j]
+        current_values = deepcopy(original_values)
+        for n in 1:N
+            for j in 1:length(base_five)
+                char = base_five[j]
+                current_values[n,j] = permutation_weights[parse(Int64, char) + 1, j,n]
+            end
         end
-        T0 = current_values[1]
-        Ts = current_values[2]
-        xBs = current_values[3]
 
-        # println(current_weights)
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
         discrepancies = MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
         ;tmax=5000, print=false,initial_values=current_values)
@@ -177,7 +181,7 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
         m = minimum(top_ten[:,10]) # find the worst performing permutations
         if sum_discrepancies > m
             insert_index = findall(x -> x==m, top_ten[:,10])[1]
-            top_ten[insert_index,1:3] = current_values
+            top_ten[insert_index,1:3] .= current_values[1,:] .- original_values[1,:]
             top_ten[insert_index,4:9] = discrepancies
             top_ten[insert_index,10] = sum_discrepancies
         end
@@ -200,6 +204,8 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
     print("Heat: $(avg_heat/n)\n")
     print("Flow: $(avg_flow/n)\n")
     print("max xB: $(avg_max_xB/n)\n")
+    # TODO make column labels
+    # TODO output to xlsx file not txt file
 
     display(top_ten)
     println("writing top ten configurations to top_ten.txt")
@@ -215,13 +221,15 @@ end
 function save_profile_images_initial_conditions(inputMatrix, adjacencies, disturbances, out_dir)
     count = 1
     for row in eachrow(inputMatrix)
-        println(row)
         T0 = row[1]
         Ts = row[2]
         xBs = row[3]
         image_name = join(row[1:3], "_")
         image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
-        MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000, print=false, save_plots=true, plot_name=image_name,initial_values=row[1:3])
+        N = size(adjacencies)[1] - 1
+        original_values = repeat([300 388.7 0.11],N)
+        initial_values = original_values .+ transpose(row[1:3])
+        MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000, print=false, save_plots=true, plot_name=image_name,initial_values=initial_values)
         count += 1
     end
 end
