@@ -26,14 +26,15 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     global Ftest=0.000709
     # 3R mixing
     # global T0=[300 300 300]
-    # global Ts=[370 370 388.7]
-    # global xBs=[0.055 0.055 0.11]
+    # global Ts=[370 380 388.7]
+    # global xBs=[0.055 0.08 0.11]
     # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
 
     # 4R mixing
     global T0=[300 300 300 300]
-    global Ts=[370 370 370 388.7]
-    global xBs=[0.055 0.055 0.055 0.11]
+    global Ts=[370 375 380 388.7]
+    global xBs=[0.055 0.07 0.085 0.11]
+    # global xBs=[0.0515 0.0752 0.1038 0.115]
     global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
     # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
     # TODO add volume into the initial_values matrix
