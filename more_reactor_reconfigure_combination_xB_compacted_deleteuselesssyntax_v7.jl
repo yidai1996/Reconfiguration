@@ -2,11 +2,13 @@
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
-include("permutation.jl")
+# include("permutation.jl")
 
 function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global F0=9/3600/N #m^3/s
     global Vlittle=0.5/3
+    # Parallel
+    # global V=[Vlittle Vlittle Vlittle Vlittle] #m^3
     global V=[Vlittle Vlittle Vlittle 0.5] #m^3
     # global V=0.5/3 #m^3
     global d_H1=-6e4 #KJ/kmol
@@ -21,22 +23,26 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     global R_gas=8.314 #KJ/kmol/K
     global xA0=1
     global xB0=0
-    # global Ftest=0.000709
-    global Ftest=0.000709 # For 4R
-    # 2R intial condition
-    # global T0=[300 300] #K
-    # global Ts=[388.7;388.7] # will change with different input n and other initial conditions
-    # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
-    # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
+    global Ftest=0.000709
+    # 3R mixing
+    # global T0=[300 300 300]
+    # global Ts=[370 370 388.7]
+    # global xBs=[0.055 0.055 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
 
-
+    # 4R mixing
+    global T0=[300 300 300 300]
+    global Ts=[370 370 370 388.7]
+    global xBs=[0.055 0.055 0.055 0.11]
+    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
     # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
-    global T0=fill(initial_values[1],N) #K
-    global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
-    global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
-    global xAs=fill(1-xBs[1],N) # will change with different input n and other initial conditions
-
-    global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
+    # TODO add volume into the initial_values matrix
+    # global T0=fill(initial_values[1],N) #K
+    # global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
+    # global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
+    # global xAs=fill(1-xBs,N) # will change with different input n and other initial conditions
+    println(T0,Ts,xBs,xAs)
+    # global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
     global Flow0=zeros(N+1,N+1)
     global Q_nom=zeros(N)
     global F_nom
@@ -257,9 +263,9 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     # global recordStepAll=zeros()
 
     T0_invt[:,1]=T0
-    Tvt[:,1]=Ts[:]
-    xAvt[:,1]=xAs[:]
-    xBvt[:,1]=xBs[:]
+    Tvt[:,1]=Ts
+    xAvt[:,1]=xAs
+    xBvt[:,1]=xBs
     heatvt[:,1]=Q_nom
     flowvt[1:N+1,1:N+1,1]=Flow0
     xBtvt[1]=sum(n[i,N+1]*flowvt[i,N+1,1]*xBvt[i,1] for i=1:N)/sum(n[i,N+1]*flowvt[i,N+1,1] for i=1:N)
