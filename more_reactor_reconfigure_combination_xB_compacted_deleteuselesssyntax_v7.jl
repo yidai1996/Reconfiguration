@@ -127,10 +127,10 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
 
-
-    println("xB_guess=",xB_guess)
-    println("xBt_guess=",xB_tot_guess)
-
+    if print
+        println("xB_guess=",xB_guess)
+        println("xBt_guess=",xB_tot_guess)
+    end
 
     JuMP.@variables MPC begin
         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
@@ -161,7 +161,7 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
 
-    @objective(MPC,Min,sum(q_T*(T[i,k]-Ts[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBs[3])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    @objective(MPC,Min,sum(q_T*(T[i,k]-Ts[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBs[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
     JuMP.optimize!(MPC)
 
 
@@ -535,7 +535,9 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
     # TODO BoundErrors occur if n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 0 0]
     Lookup=findall(isone,n) # find all index of open streams
     L=length(Lookup)
-    println("L=",L)
+    if print
+        println("L=",L)
+    end
     flow_start=zeros(L)
     flow_start[:].=Ftest
     Ttot=zeros(N+1,N)
@@ -601,15 +603,15 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
 end
 
 
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Reactor Performance\\4R Systems\\"
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
 adjacencies = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
-disturbances = [0 0;0 0;0 0;10 10]
-initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
+disturbances = [10 10; 0 0; 0 0; 0 0]
+initial_conditions = repeat([300 408.7 0.11],size(adjacencies)[1] - 1)
 
-MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
-    initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
+# MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
+#     initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
 # top_ten = permutate_weights(out_dir, disturbances)
-# top_ten = permutate_initial_conditions(out_dir, adjacencies, disturbances)
+top= permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=25)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
 #                     0.01	100000.0	1.0e11	0.001	1.0e9	0.005476772796985585	214532.18323354874	4.918302353195665e-6	349513.81350522436	0.005476772796985585
 #                     0.01	100000.0	1.0e10	1.0000000000000002e-6	1.0e9	0.007322597410352353	109371.49364775658	3.485568289844138e-5	2.62339968185887e6	0.007322597410352353
@@ -621,7 +623,7 @@ MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
-# save_profile_images_initial_conditions(top_ten, adjacencies, disturbances, out_dir)
+save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R

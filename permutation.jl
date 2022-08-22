@@ -116,10 +116,11 @@ function save_profile_images_permutations(inputMatrix, disturbances, out_dir)
     end
 end
 
-function permutate_initial_conditions(out_dir, adjacencies, disturbances)
+function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=10)
     # TODO maybe have user input initial conditions
     # TODO make for n reactor system, output 25x10 s file for 2 and 3 reactors
     N = size(adjacencies)[1] - 1
+    unique_permutations = 0
     # Nxm matrix where N is number of reactors and m is number of initial conditions
     original_values = repeat([300 388.7 0.11],N)
     steps_each_side = 2
@@ -133,9 +134,14 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
         end
     end
     display(permutation_weights)
-    top_ten = fill(0.0, (10,10))
+
 
     num_permutations = 5^(size(original_values)[2]) - 1 # iterate in base 5 through all possible permutations
+
+    # lists all previous displacements so in the event of a 0 step we don't repeat unneeded simulations
+    # fill with random small number so that the original displacements of 0 gets put there too
+    completed_permutations = fill(0.000001010110000001, (num_permutations+1,size(original_values)[2]))
+    top = fill(0.0, (num_final_permutations,10))
 
     # normalizing constants make the different fields factor equally into the sums
     n = 0
@@ -155,11 +161,25 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
         # println(base_five)
         current_values = deepcopy(original_values)
         for n in 1:N
-            for j in 1:length(base_five)
+            for j in 1:size(original_values)[2]
                 char = base_five[j]
                 current_values[n,j] = permutation_weights[parse(Int64, char) + 1, j,n]
             end
         end
+        current_displacements = current_values[1,:] .- original_values[1,:]
+
+        # check to see if permutation already in top permutations
+        already_exists = false
+        for j in 1:num_permutations
+            if completed_permutations[j,:] == current_displacements
+                already_exists = true
+            end
+        end
+        completed_permutations[i+1,:] = current_displacements
+        if already_exists
+            continue
+        end
+        unique_permutations += 1
 
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
         discrepancies = MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
@@ -178,12 +198,14 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
         # sum_discrepancies = discrepancies[5] # test 3
         # sum_discrepancies = xB_norm_const_test_1 * discrepancies[1] + discrepancies[2] + discrepancies[6] # test 4
         sum_discrepancies = discrepancies[1] # just xB
-        m = minimum(top_ten[:,10]) # find the worst performing permutations
+
+
+        m = minimum(top[:,10]) # find the worst performing permutations
         if sum_discrepancies > m
-            insert_index = findall(x -> x==m, top_ten[:,10])[1]
-            top_ten[insert_index,1:3] .= current_values[1,:] .- original_values[1,:]
-            top_ten[insert_index,4:9] = discrepancies
-            top_ten[insert_index,10] = sum_discrepancies
+            insert_index = findall(x -> x==m, top[:,10])[1]
+            top[insert_index,1:3] .= current_values[1,:] .- original_values[1,:]
+            top[insert_index,4:9] = discrepancies
+            top[insert_index,10] = sum_discrepancies
         end
         # for j in 1:10
         #     # println("$(top_ten[j,10]) $sum_discrepancies")
@@ -198,6 +220,10 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
         #     end
         # end
     end
+    println("$(unique_permutations) unique permutations found!")
+    for i in 1:num_permutations
+        println(completed_permutations[i,:])
+    end
     println("Average discrepancies")
     print("xB: $(avg_xB/n)\n")
     print("T: $(avg_T/n)\n")
@@ -207,23 +233,22 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances)
     # TODO make column labels
     # TODO output to xlsx file not txt file
 
-    display(top_ten)
-    println("writing top ten configurations to top_ten.txt")
-    top_ten_file = out_dir * "\\top_ten_initial_conditions.txt"
-    touch(top_ten_file)
-    file = open(top_ten_file, "w")
-    writedlm(file, top_ten)
+    top = round.(top,digits=9)
+    display(top)
+    println("writing top configurations to file")
+    top_file = out_dir * "\\top_initial_conditions.txt"
+    touch(top_file)
+    file = open(top_file, "w")
+    write(file, "T0\tTs\txBs\txBtvt\tTvt\tflowvt\theatvt\tmax_Tvt\tt_stable\tscore\n")
+    writedlm(file, top)
     close(file)
 
-    return top_ten
+    return top
 end
 
 function save_profile_images_initial_conditions(inputMatrix, adjacencies, disturbances, out_dir)
     count = 1
     for row in eachrow(inputMatrix)
-        T0 = row[1]
-        Ts = row[2]
-        xBs = row[3]
         image_name = join(row[1:3], "_")
         image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
         N = size(adjacencies)[1] - 1
