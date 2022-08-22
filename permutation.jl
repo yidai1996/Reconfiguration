@@ -1,6 +1,8 @@
 # file with the functions for permutating the
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
+using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
+using DataFrames
 # include("more_reactor_reconfigure_combination_xB_compacted_deleteuselesssyntax_v7.jl")
 
 function permutate_weights(out_dir, disturbances)
@@ -118,7 +120,6 @@ end
 
 function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=10)
     # TODO maybe have user input initial conditions
-    # TODO make for n reactor system, output 25x10 s file for 2 and 3 reactors
     N = size(adjacencies)[1] - 1
     unique_permutations = 0
     # Nxm matrix where N is number of reactors and m is number of initial conditions
@@ -157,7 +158,7 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_fi
     # for i in ProgressBar(10:20)
     for i in ProgressBar(0:num_permutations)
     # for i in 0:100
-        base_five = string(i, base=5, pad=size(original_values)[1])
+        base_five = string(i, base=5, pad=size(original_values)[2])
         # println(base_five)
         current_values = deepcopy(original_values)
         for n in 1:N
@@ -182,8 +183,8 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_fi
         unique_permutations += 1
 
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        discrepancies = MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
-        ;tmax=5000, print=false,initial_values=current_values)
+        discrepancies = MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],current_values
+        ;tmax=5000, print=false)
         n += 1
         avg_xB += discrepancies[1]
         avg_T += discrepancies[2]
@@ -237,10 +238,15 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_fi
     display(top)
     println("writing top configurations to file")
     top_file = out_dir * "\\top_initial_conditions.txt"
+    top_excel_file = out_dir * "\\top_initial_conditions.xlsx"
     touch(top_file)
     file = open(top_file, "w")
-    write(file, "T0\tTs\txBs\txBtvt\tTvt\tflowvt\theatvt\tmax_Tvt\tt_stable\tscore\n")
+    column_names = ["T0", "Ts", "xBs", "xBtvt", "Tvt", "flowvt", "heatvt", "max_Tvt", "tt_stable", "score"]
+    # write to text file
+    write(file, join(column_names, "\t") * "\n")
     writedlm(file, top)
+    # write to excel file
+    XLSX.writetable(top_excel_file, column_names, top, overwrite=true)
     close(file)
 
     return top
@@ -254,7 +260,7 @@ function save_profile_images_initial_conditions(inputMatrix, adjacencies, distur
         N = size(adjacencies)[1] - 1
         original_values = repeat([300 388.7 0.11],N)
         initial_values = original_values .+ transpose(row[1:3])
-        MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000, print=false, save_plots=true, plot_name=image_name,initial_values=initial_values)
+        MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],initial_values;tmax=5000, print=false, save_plots=true, plot_name=image_name)
         count += 1
     end
 end

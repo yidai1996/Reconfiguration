@@ -1,7 +1,9 @@
 # For any given number of reactors and potential configurations
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
+using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
+using DataFrames
 include("permutation.jl")
 
 function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
@@ -604,9 +606,9 @@ end
 
 
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-adjacencies = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
-disturbances = [10 10; 0 0; 0 0; 0 0]
-initial_conditions = repeat([300 408.7 0.11],size(adjacencies)[1] - 1)
+adjacencies = [0 0 1; 0 0 1; 1 1 0]
+disturbances = [10 10; 0 0]
+initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
 # MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
 #     initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
