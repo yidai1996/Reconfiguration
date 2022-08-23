@@ -606,8 +606,8 @@ end
 
 
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-adjacencies = [0 0 1; 0 0 1; 1 1 0]
-disturbances = [10 10; 0 0]
+adjacencies = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
+disturbances = [10 10; 0 0; 0 0; 0 0]
 initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
 # MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],

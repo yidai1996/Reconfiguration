@@ -246,7 +246,7 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_fi
     write(file, join(column_names, "\t") * "\n")
     writedlm(file, top)
     # write to excel file
-    XLSX.writetable(top_excel_file, column_names, top, overwrite=true)
+    XLSX.writetable(top_excel_file, [top[:, i] for i in 1:size(top,2)], column_names, overwrite=true)
     close(file)
 
     return top
