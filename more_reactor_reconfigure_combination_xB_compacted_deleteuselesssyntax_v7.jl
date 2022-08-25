@@ -1,8 +1,10 @@
 # For any given number of reactors and potential configurations
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt, MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile
-# include("permutation.jl")
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
+using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
+using DataFrames
+include("permutation.jl")
 
 function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global F0=9/3600/N #m^3/s
@@ -23,7 +25,6 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     global R_gas=8.314 #KJ/kmol/K
     global xA0=1
     global xB0=0
-    global Ftest=0.000709
     # 3R mixing
     # global T0=[300 300 300]
     # global Ts=[370 380 388.7]
@@ -31,19 +32,32 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
 
     # 4R mixing
-    global T0=[300 300 300 300]
-    global Ts=[370 375 380 388.7]
-    global xBs=[0.055 0.07 0.085 0.11]
+    # global T0=[300 300 300 300]
+    # global Ts=[370 375 380 388.7]
+    # global xBs=[0.055 0.07 0.085 0.11]
     # global xBs=[0.0515 0.0752 0.1038 0.115]
-    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
     # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
     # TODO add volume into the initial_values matrix
     # global T0=fill(initial_values[1],N) #K
     # global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
     # global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
     # global xAs=fill(1-xBs,N) # will change with different input n and other initial conditions
-    println(T0,Ts,xBs,xAs)
-    # global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
+    # global Ftest=0.000709
+    global Ftest=0.000709 # For 4R
+    # 2R intial condition
+    # global T0=[300 300] #K
+    # global Ts=[388.7;388.7] # will change with different input n and other initial conditions
+    # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
+    # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
+
+    # TODO initial value matrix nxm: n is number of reactors and m is 3 (T0,Ts,xBs)
+    global T0=initial_values[:,1] #K
+    global Ts=initial_values[:,2] # will change with different input n and other initial conditions
+    global xBs=initial_values[:,3] # will change with different input n and other initial conditions
+    global xAs=1 .- xBs # will change with different input n and other initial conditions
+
+    global F0=(-k1*exp(-E1/R_gas/Ts[1])*(1-xBs[1])+(k2*exp(-E2/R_gas/Ts[1])*xBs[1]))*V/(xB0-xBs[1])
     global Flow0=zeros(N+1,N+1)
     global Q_nom=zeros(N)
     global F_nom
@@ -135,10 +149,10 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
         xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
 
-
-    println("xB_guess=",xB_guess)
-    println("xBt_guess=",xB_tot_guess)
-
+    if print
+        println("xB_guess=",xB_guess)
+        println("xBt_guess=",xB_tot_guess)
+    end
 
     JuMP.@variables MPC begin
         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
@@ -218,7 +232,7 @@ function MPC_solve(n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,
 end
 
 function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
-    dist_time;tmax=200,print=true,save_plots=false,plot_name="all_plots.png",initial_values=[300,388.7,0.11]) # This is for continous disturbance on the (unstable) input temperature
+    dist_time,initial_values;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
     # (runs the moving horizon loop for set point tracking)
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
@@ -543,7 +557,9 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
     # TODO BoundErrors occur if n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 0 0]
     Lookup=findall(isone,n) # find all index of open streams
     L=length(Lookup)
-    println("L=",L)
+    if print
+        println("L=",L)
+    end
     flow_start=zeros(L)
     flow_start[:].=Ftest
     Ttot=zeros(N+1,N)
@@ -610,13 +626,14 @@ end
 
 
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-adjacencies = [0 0 1; 0 0 1; 1 1 0]
-disturbances = [10 10; 0 0]
+adjacencies = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
+disturbances = [10 10; 0 0; 0 0; 0 0]
+initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
-MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
-    ;tmax=5000, initial_values=[300,388.7,0.7])
+# MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
+#     initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
 # top_ten = permutate_weights(out_dir, disturbances)
-# top_ten = permutate_initial_conditions(out_dir, adjacencies, disturbances)
+top= permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=25)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
 #                     0.01	100000.0	1.0e11	0.001	1.0e9	0.005476772796985585	214532.18323354874	4.918302353195665e-6	349513.81350522436	0.005476772796985585
 #                     0.01	100000.0	1.0e10	1.0000000000000002e-6	1.0e9	0.007322597410352353	109371.49364775658	3.485568289844138e-5	2.62339968185887e6	0.007322597410352353
@@ -628,7 +645,7 @@ MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15]
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
-# save_profile_images_initial_conditions(top_ten, adjacencies, disturbances, out_dir)
+save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R
