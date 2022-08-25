@@ -9,6 +9,8 @@ include("permutation.jl")
 function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # global F0=9/3600/N #m^3/s
     global Vlittle=0.5/3
+    # Parallel
+    # global V=[Vlittle Vlittle Vlittle Vlittle] #m^3
     global V=[Vlittle Vlittle Vlittle 0.5] #m^3
     # global V=0.5/3 #m^3
     global d_H1=-6e4 #KJ/kmol
@@ -23,6 +25,24 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     global R_gas=8.314 #KJ/kmol/K
     global xA0=1
     global xB0=0
+    # 3R mixing
+    # global T0=[300 300 300]
+    # global Ts=[370 380 388.7]
+    # global xBs=[0.055 0.08 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+
+    # 4R mixing
+    # global T0=[300 300 300 300]
+    # global Ts=[370 375 380 388.7]
+    # global xBs=[0.055 0.07 0.085 0.11]
+    # global xBs=[0.0515 0.0752 0.1038 0.115]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
+    # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
+    # TODO add volume into the initial_values matrix
+    # global T0=fill(initial_values[1],N) #K
+    # global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
+    # global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
+    # global xAs=fill(1-xBs,N) # will change with different input n and other initial conditions
     # global Ftest=0.000709
     global Ftest=0.000709 # For 4R
     # 2R intial condition
@@ -258,9 +278,9 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     # global recordStepAll=zeros()
 
     T0_invt[:,1]=T0
-    Tvt[:,1]=Ts[:]
-    xAvt[:,1]=xAs[:]
-    xBvt[:,1]=xBs[:]
+    Tvt[:,1]=Ts
+    xAvt[:,1]=xAs
+    xBvt[:,1]=xBs
     heatvt[:,1]=Q_nom
     flowvt[1:N+1,1:N+1,1]=Flow0
     xBtvt[1]=sum(n[i,N+1]*flowvt[i,N+1,1]*xBvt[i,1] for i=1:N)/sum(n[i,N+1]*flowvt[i,N+1,1] for i=1:N)
