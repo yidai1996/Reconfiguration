@@ -375,8 +375,10 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     end
     s[5] = maximum(Tvt[1,:])
     epsilon = 0.01 * xBs[1]
-    for i in 1:length(xBtvt)
-        if i > dist_time[1] && xBtvt[i] < xBs[1] + epsilon
+    s[6] = -1 # set to -1 in case we don't find that it has reached stability
+    for i in 1:(length(xBtvt)-2)
+        if (i > maximum(dist_time) && abs(xBtvt[i] - xBs[1]) < epsilon
+            && abs(xBtvt[i+1] - xBs[1]) < epsilon && abs(xBtvt[i+2] - xBs[1]) < epsilon)
             s[6] = i
             break
         end
@@ -607,7 +609,7 @@ end
 
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
 adjacencies = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
-disturbances = [10 10; 0 0; 0 0; 0 0]
+disturbances = [0 0; 0 0; 0 0; 0 0]
 initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
 # MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
