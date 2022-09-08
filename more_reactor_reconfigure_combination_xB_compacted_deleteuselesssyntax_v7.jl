@@ -316,7 +316,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
         # println("heat=",heatvt[:,tt])
         # println("flow=",flowvt[:,:,tt])
 
-        resultsheatvt,resultsflowvt=MPC_solve(xBsetpoint[:,tt],n,flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
+        resultsheatvt,resultsflowvt=MPC_solve(xBsetpoint[:,tt],Tsetpoint[:,tt],n,flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
             heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
 
         for i=1:N
