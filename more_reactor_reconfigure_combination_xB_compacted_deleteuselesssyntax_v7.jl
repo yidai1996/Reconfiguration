@@ -6,7 +6,7 @@ using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
 include("permutation.jl")
 
-function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
+function loadProcessData(N::Int,n,initial_values;print=true)
     # global F0=9/3600/N #m^3/s
     global Vlittle=0.5/3
     # Parallel
@@ -27,15 +27,15 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     global xA0=1
     global xB0=0
     # 3R parallel
-    # global T0=[300 300 300]
-    # global Ts=[388.7 388.7 388.7]
-    # global xBs=[0.11 0.11 0.11]
-    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
-    # 3R 2&1parallel
     global T0=[300 300 300]
-    global Ts=[370 388.7 388.7]
-    global xBs=[0.055 0.11 0.11]
+    global Ts=[388.7 388.7 388.7]
+    global xBs=[0.11 0.11 0.11]
     global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+    # 3R 2&1parallel
+    # global T0=[300 300 300]
+    # global Ts=[370 388.7 388.7]
+    # global xBs=[0.055 0.11 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
     # 3R series
     # global T0=[300 300 300]
     # global Ts=[370 380 388.7]
@@ -44,7 +44,7 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # 3R mixing
     # global T0=[300 300 300]
     # global Ts=[370 370 388.7]
-    # global xBs=[0.05 0.05 0.11]
+    # global xBs=[0.055 0.055 0.11]
     # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
 
     # 4R mixing
@@ -95,7 +95,7 @@ function loadProcessData(N::Int,n::Array{Int,2},initial_values;print=true)
     # println("Q = ", Q_nom," F = ", F_nom)
 end
 
-function MPC_solve(xBset,Tset,n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
+function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
     # println("n=",n)
     global count
 
@@ -109,17 +109,9 @@ function MPC_solve(xBset,Tset,n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB
     xA_0=xA_0real
     xB_0=xB_0real
 
-    # println("T0_in=",T0_in)
-    # println("T_0=",T_0)
-    # println("xA_0=",xA_0)
-    # println("xB_0=",xB_0)
-
-    # heat_ss=zeros(N)
-    # flow_ss=zeros(N)
-    # mpclook=zeros()
-
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
+    println(Tset,xBset)
     heat_ss,flow_ss,mpclook=findSS_all(T0_in,Tset,xBset,n,print=print)
 
 
@@ -247,12 +239,12 @@ function MPC_solve(xBset,Tset,n::Array{Int,2},Flow,T0_inreal,T_0real,xA_0real,xB
 
 end
 
-function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
+function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     dist_time,setpoint_time,initial_values;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
     # (runs the moving horizon loop for set point tracking)
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
-    global N=size(n)[1]-1
+    global N=size(n1)[1]-1
     if print
         println("N=",N)
     end
@@ -266,7 +258,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
             return
         end
     end
-    loadProcessData(N,n,initial_values,print=print)
+    loadProcessData(N,n1,initial_values,print=print)
 
     time_steps=round(Int,tmax/dt)
 
@@ -286,6 +278,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
     global xBvt=zeros(N,time_steps+1)
     global heatvt=zeros(N,time_steps+1)
     global flowvt=zeros(N+1,N+1,time_steps+1)
+    global adjacentM=zeros(N+1,N+1,time_steps+1)
     global xBtvt=zeros(1,time_steps+1)
     newstate=zeros(3*N)
     # Y=zeros(time_steps+1)
@@ -298,25 +291,19 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
 
     T0_invt[:,1]=T0
     xBsetpoint[:,1]=xBs
-    Tsetpoint[:,1]=T0
+    Tsetpoint[:,1]=Ts
     Tvt[:,1]=Ts
     xAvt[:,1]=xAs
     xBvt[:,1]=xBs
     heatvt[:,1]=Q_nom
     flowvt[1:N+1,1:N+1,1]=Flow0
-    xBtvt[1]=sum(n[i,N+1]*flowvt[i,N+1,1]*xBvt[i,1] for i=1:N)/sum(n[i,N+1]*flowvt[i,N+1,1] for i=1:N)
+    adjacentM[1:N+1,1:N+1,1]=n1
+    xBtvt[1]=sum(n1[i,N+1]*flowvt[i,N+1,1]*xBvt[i,1] for i=1:N)/sum(n1[i,N+1]*flowvt[i,N+1,1] for i=1:N)
     times[1]=0
     tt=1
 
     for tt=1:time_steps
-        # println("These are the inputs for MPC_solve")
-        # println("T=",Tvt[:,tt])
-        # println("Tin=",T0_invt[:,tt])
-        # println("xB=",xBvt[:,tt])
-        # println("heat=",heatvt[:,tt])
-        # println("flow=",flowvt[:,:,tt])
-
-        resultsheatvt,resultsflowvt=MPC_solve(xBsetpoint[:,tt],Tsetpoint[:,tt],n,flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
+        resultsheatvt,resultsflowvt=MPC_solve(xBsetpoint[:,tt],Tsetpoint[:,tt],adjacentM[:,:,tt],flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
             heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
 
         for i=1:N
@@ -346,7 +333,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
             end
         end
 
-        newstate=MPC_step_all(T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],heatvt[:,tt+1],flowvt[:,:,tt+1],n,dt,print=print)
+        newstate=MPC_step_all(T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],heatvt[:,tt+1],flowvt[:,:,tt+1],adjacentM[:,:,tt],dt,print=print)
         for aa=0:N-1
             Tvt[aa+1,tt+1]=newstate[3*aa+1]
             xAvt[aa+1,tt+1]=newstate[3*aa+2]
@@ -370,19 +357,22 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
 
             end
         end
+        # Configuration tracking
         # setpoint tracking
         for i=1:N
-            j=Int(l)
+            j=Int(ll)
             # println("j=",j)
             while j>=0
                 if j==0
                     xBsetpoint[i,tt+1]=xBs[i]
                     Tsetpoint[i,tt+1]=Ts[i]
+                    adjacentM[:,:,tt+1]=n1
                     break
                 end
                 if tt>=setpoint_time[j]
                     xBsetpoint[i,tt+1]=xBs[i]+SetChange_xB[i,j]
                     Tsetpoint[i,tt+1]=Ts[i]+SetChange_T[i,j]
+                    adjacentM[:,:,tt+1]=n2
                     # println("i=",i," j=",j," T0_invt[i,tt+1]=",T0_invt[i,tt+1]," dist_time[j]=",dist_time[j])
                     break
                 else j=j-1
@@ -391,7 +381,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
             end
         end
 
-        xBtvt[tt+1]=sum(n[i,N+1]*flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(n[i,N+1]*flowvt[i,N+1,tt+1] for i=1:N)
+        xBtvt[tt+1]=sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1] for i=1:N)
         times[tt+1]=times[tt]+dt
         count=count+1
     end
@@ -434,7 +424,7 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
         #TODO xBs[1] is wrong
         s += [sum((xBtvt[t] - xBsetpoint[end,t])^2), sum((Tvt[i,t]-Ts[i])^2 for i=1:N), sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1),
                 sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
-        b[t]=(xBtvt[t] - xBsetpoint[end,tt])^2
+        b[t] = b[t-1] + q_xB*sum((xBtvt[t] - xBsetpoint[end,t])^2) + q_T*sum((Tvt[i,t]-Ts[i])^2 for i=1:N) + r_flow*sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1) + r_heat*sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N)
     end
     s[5] = maximum(Tvt[1,:])
     epsilon = 0.01 * xBs[end]
@@ -448,15 +438,15 @@ function MPC_tracking(n::Array{Int,2},Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,
     #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
     println("writing performance to file")
-    top_file = out_dir * "\\3R 2and1 parallel_performance_xBt-0.1.txt"
-    top_excel_file = out_dir * "\\3R 2and1 parallel_performance_xBt-0.1.xlsx"
+    top_file = out_dir * "\\3R parallel to series.txt"
+    top_excel_file = out_dir * "\\3R parallel to series.xlsx"
     touch(top_file)
     file = open(top_file, "w")
-    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "delta_xB", "tt_stable"]
+    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "tt_stable"]
     # write to text file
     write(file, join(column_names, "\t") * "\n")
     # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],fill(s[1],length(times)),fill(s[6],length(times))]
+    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
     writedlm(file, data)
     # write to excel file
     XLSX.writetable(top_excel_file, data, column_names)
