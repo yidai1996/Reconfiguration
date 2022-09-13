@@ -138,7 +138,7 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_fi
         end
     end
     display(permutation_weights)
-
+# add
 
     num_permutations = 5^(size(original_values)[2]) - 1 # iterate in base 5 through all possible permutations
 

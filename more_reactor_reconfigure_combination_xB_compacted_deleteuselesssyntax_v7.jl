@@ -238,6 +238,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     return results_heat0, results_flow0
 
 end
+add
 
 function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     dist_time,setpoint_time,initial_values;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
@@ -385,15 +386,6 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         times[tt+1]=times[tt]+dt
         count=count+1
     end
-
-    # p[1]=plot(times,[T0_invt[1,:],xBvt[1,:],xBtvt,heatvt[1,:],flowvt[1,:],mvt],layout=(2,3),xlabel="Time (s)",label=["R1" "R1" false "R1" "R1" false], ylabel=["T_Input(K)" "xB" "Final output xB" "Q(KW)" "F1(m^3/s)" "Flow assignment "])
-    # for i=2:N
-    #     R=@sprintf("R%s",i)
-    #     p[i]=plot!(times,[T0_invt[i,:],xBvt[i,:],heatvt[i,:],flowvt[i,:],xBtvt],layout=(2,3),label=[R R false R R false])
-    # end
-    # for i=1:N
-    #     display(p[i])
-    # end
 
      # have to reshape because plot accepts a matrix not a vector, also must be 1xN not Nx1
     label = reshape(["R$i" for i in 1:N],1,N)
