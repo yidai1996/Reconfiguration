@@ -437,20 +437,20 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     end
     #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
-    println("writing performance to file")
-    top_file = out_dir * "\\3R parallel to series.txt"
-    top_excel_file = out_dir * "\\3R parallel to series.xlsx"
-    touch(top_file)
-    file = open(top_file, "w")
-    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "tt_stable"]
-    # write to text file
-    write(file, join(column_names, "\t") * "\n")
+    # println("writing performance to file")
+    # top_file = out_dir * "\\3R parallel to series.txt"
+    # top_excel_file = out_dir * "\\3R parallel to series.xlsx"
+    # touch(top_file)
+    # file = open(top_file, "w")
+    # column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "tt_stable"]
+    # # write to text file
+    # write(file, join(column_names, "\t") * "\n")
+    # # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
     # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    writedlm(file, data)
-    # write to excel file
-    XLSX.writetable(top_excel_file, data, column_names)
-    close(file)
+    # writedlm(file, data)
+    # # write to excel file
+    # XLSX.writetable(top_excel_file, data, column_names)
+    # close(file)
 
     return s
 
@@ -579,9 +579,9 @@ end
 
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking"
-adjacencies = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
-disturbances = [0 0; 0 0; 0 0]
+out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Initial condition permutations"
+adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+disturbances = [10 10; 0 0; 0 0]
 
 initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
