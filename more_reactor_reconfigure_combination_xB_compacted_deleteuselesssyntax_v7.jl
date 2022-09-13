@@ -27,15 +27,15 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     global xA0=1
     global xB0=0
     # 3R parallel
-    global T0=[300 300 300]
-    global Ts=[388.7 388.7 388.7]
-    global xBs=[0.11 0.11 0.11]
-    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
-    # 3R 2&1parallel
     # global T0=[300 300 300]
-    # global Ts=[370 388.7 388.7]
-    # global xBs=[0.055 0.11 0.11]
+    # global Ts=[388.7 388.7 388.7]
+    # global xBs=[0.11 0.11 0.11]
     # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+    # 3R 2&1parallel
+    global T0=[300 300 300]
+    global Ts=[370 388.7 388.7]
+    global xBs=[0.055 0.11 0.11]
+    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
     # 3R series
     # global T0=[300 300 300]
     # global Ts=[370 380 388.7]
@@ -400,7 +400,7 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         end
         p5=plot(times,transpose(flow_plot),xlabel="Time (s)", label=label,ylabel="F (m^3/s)")
         p6=plot(times,transpose(Tvt),xlabel="Time (s)",label=label,ylabel="Reactor Temperature")
-        p_all=plot(p1,p2,p3,p4,p5,p6,layout=(2,3),xtickfontsize=6,ytickfontsize=6,xguidefontsize=8,yguidefontsize=8)
+        p_all=plot(p1,p2,p3,p4,p5,p6,layout=(2,3),legend=:bottomright,xtickfontsize=6,ytickfontsize=6,xguidefontsize=8,yguidefontsize=8)
         if print
             display(p_all)
         end
@@ -429,20 +429,20 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     end
     #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
-    # println("writing performance to file")
-    # top_file = out_dir * "\\3R parallel to series.txt"
-    # top_excel_file = out_dir * "\\3R parallel to series.xlsx"
-    # touch(top_file)
-    # file = open(top_file, "w")
-    # column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "tt_stable"]
-    # # write to text file
-    # write(file, join(column_names, "\t") * "\n")
-    # # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
+    println("writing performance to file")
+    top_file = out_dir * "\\3R 2and1 parallel to series.txt"
+    top_excel_file = out_dir * "\\3R 2and1 parallel to series.xlsx"
+    touch(top_file)
+    file = open(top_file, "w")
+    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "tt_stable"]
+    # write to text file
+    write(file, join(column_names, "\t") * "\n")
     # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    # writedlm(file, data)
-    # # write to excel file
-    # XLSX.writetable(top_excel_file, data, column_names)
-    # close(file)
+    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
+    writedlm(file, data)
+    # write to excel file
+    XLSX.writetable(top_excel_file, data, column_names)
+    close(file)
 
     return s
 
@@ -571,7 +571,7 @@ end
 
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Initial condition permutations"
+out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
 adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 disturbances = [10 10; 0 0; 0 0]
 
