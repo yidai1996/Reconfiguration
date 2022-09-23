@@ -1,7 +1,7 @@
 # For any given number of reactors and potential configurations
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
 include("permutation.jl")
@@ -101,7 +101,8 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
 
     K=round(Int,P/dt)
 
-    MPC=Model(Ipopt.Optimizer)
+    # MPC=Model(Ipopt.Optimizer)
+    MPC=Model(() -> BARON.Optimizer(MaxTime=10000))
     MOI.set(MPC, MOI.RawOptimizerAttribute("print_level"), 1)
 
     T0_in=T0_inreal
@@ -448,8 +449,8 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
     println("writing performance to file")
-    top_file = out_dir * "\\3R parallel to 2and1 parallel +0.12.txt"
-    top_excel_file = out_dir * "\\3R parallel to parallel -0.05.xlsx"
+    top_file = out_dir * "\\3R parallel to series +15K.txt"
+    top_excel_file = out_dir * "\\3R parallel to series +15K.xlsx"
     touch(top_file)
     file = open(top_file, "w")
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
@@ -589,7 +590,7 @@ end
 
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
+out_dir = "G:\\My Drive\\Research\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Disturbance tracking"
 adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 disturbances = [10 10; 0 0; 0 0]
 
