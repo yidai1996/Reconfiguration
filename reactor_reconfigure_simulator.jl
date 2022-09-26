@@ -588,9 +588,10 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
 end
 
 
-# out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
-adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
+# out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
+R3_parallel = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+R3_mixing = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
 disturbances = [10 10; 0 0; 0 0]
 
 initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)

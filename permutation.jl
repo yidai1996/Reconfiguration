@@ -119,7 +119,6 @@ function save_profile_images_permutations(inputMatrix, disturbances, out_dir)
 end
 
 function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=10)
-    # TODO maybe have user input initial conditions
     N = size(adjacencies)[1] - 1
     unique_permutations = 0
     # Nxm matrix where N is number of reactors and m is number of initial conditions
@@ -235,8 +234,6 @@ function permutate_initial_conditions(out_dir, adjacencies, disturbances; num_fi
     print("Heat: $(avg_heat/n)\n")
     print("Flow: $(avg_flow/n)\n")
     print("max xB: $(avg_max_xB/n)\n")
-    # TODO make column labels
-    # TODO output to xlsx file not txt file
 
     top = round.(top,digits=9)
     display(top)
@@ -270,19 +267,30 @@ function save_profile_images_initial_conditions(inputMatrix, adjacencies, distur
     end
 end
 
-function permutate_setpoint(out_dir, adjacencies, disturbances; num_final_permutations=10)
+# changes the configuration in the middle of running, permutates only xBs' from 0.26-0.46
+# reactors to permutate is the list of reactor numbers to permutate xBs' on
+function permutate_setpoint(out_dir, initial_conditions, n1, n2, reactors_to_permutate; num_final_permutations=10)
     # TODO rewrite the code below for permuting setpoints
     N = size(adjacencies)[1] - 1
     unique_permutations = 0
     # Nxm matrix where N is number of reactors and m is number of initial conditions
-    original_values = repeat([300 388.7 0.11],N)
+    # original_values = repeat([300 388.7 0.11],N)
+    # original_values = [300 370 0.055;300 380 0.08; 300 388.7 0.11] # 3R series
+    # original_values = [300 370 0.055;300 388.7 0.11; 300 388.7 0.11] # 3R 2and1 parallel
+    # original_values = [300 370 0.055;300 370 0.055; 300 388.7 0.11] # 3R mixing
+    original_values = initial_conditions
+    original_values_prime = deepcopy(initial_conditions)
+    original_values_prime[N,3]=0.36
     steps_each_side = 2
-    step_size = [0,10,0.05]
+    step_size = [0,0,0.05]
     permutation_weights = zeros(Float64, (2*steps_each_side + 1,size(original_values)[2],N))
     for n in 1:N
         for i in 1:(2*steps_each_side + 1)
             for j in 1:size(original_values)[2]
-                permutation_weights[i,j,n] = original_values[n,j] + ((i - (steps_each_side + 1)) * step_size[j])
+                permutation_weights[i,j,n] = original_values[n,j]
+                if n in reactors_to_permutate # only permutate output reactors
+                    permutation_weights[i,j,n] += ((i - (steps_each_side + 1)) * step_size[j])
+                end
             end
         end
     end
@@ -335,8 +343,9 @@ function permutate_setpoint(out_dir, adjacencies, disturbances; num_final_permut
         unique_permutations += 1
 
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        discrepancies = MPC_tracking(adjacencies, adjacencies,disturbances,[0 0;0 0;0 0],[0 0;0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,current_values
-        ;tmax=5000, print=false)
+        #TODO pass along set change parameters into MPC_tracking
+        discrepancies = MPC_tracking(adjacencies, adjacencies,disturbances,[0 0;0 0;0 0],[0 0;0 0;0 0]
+        ,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,current_values;tmax=5000, print=false)
         n += 1
         avg_xB += discrepancies[1]
         avg_T += discrepancies[2]
@@ -383,8 +392,7 @@ function permutate_setpoint(out_dir, adjacencies, disturbances; num_final_permut
     print("Heat: $(avg_heat/n)\n")
     print("Flow: $(avg_flow/n)\n")
     print("max xB: $(avg_max_xB/n)\n")
-    # TODO make column labels
-    # TODO output to xlsx file not txt file
+
 
     top = round.(top,digits=9)
     display(top)
@@ -404,7 +412,7 @@ function permutate_setpoint(out_dir, adjacencies, disturbances; num_final_permut
     return top
 end
 
-function save_profile_images_permutation_setpoints(inputMatrix, adjacencies, disturbances, out_dir)
+function save_profile_images_permutation_setpoints(inputMatrix, n1,n2, reactors_to_permutate, disturbances, out_dir)
     # TODO rewrite the code below for permuting setpoint
     count = 1
     for row in eachrow(inputMatrix)
@@ -413,7 +421,7 @@ function save_profile_images_permutation_setpoints(inputMatrix, adjacencies, dis
         N = size(adjacencies)[1] - 1
         original_values = repeat([300 388.7 0.11],N)
         initial_values = original_values .+ transpose(row[1:3])
-        MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],initial_values;tmax=5000, print=false, save_plots=true, plot_name=image_name)
+        MPC_tracking(n1,n2,disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],initial_values;tmax=5000, print=false, save_plots=true, plot_name=image_name)
         count += 1
     end
 end
