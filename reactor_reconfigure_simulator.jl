@@ -53,8 +53,6 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     # global xBs=[0.055 0.07 0.085 0.11]
     # global xBs=[0.0515 0.0752 0.1038 0.115]
     # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
-    # TODO initial value matrix mxn: m is 3 T0,Ts,xBs and n is number of reactors
-    # TODO add volume into the initial_values matrix
     # global T0=fill(initial_values[1],N) #K
     # global Ts=fill(initial_values[2],N) # will change with different input n and other initial conditions
     # global xBs=fill(initial_values[3],N) # will change with different input n and other initial conditions
@@ -67,7 +65,6 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     # global xBs=[0.11;0.11] # will change with different input n and other initial conditions
     # global xAs=[1-xBs[1];1-xBs[2]] # will change with different input n and other initial conditions
 
-    # TODO initial value matrix nxm: n is number of reactors and m is 3 (T0,Ts,xBs)
     # global T0=initial_values[:,1] #K
     # global Ts=initial_values[:,2] # will change with different input n and other initial conditions
     # global xBs=initial_values[:,3] # will change with different input n and other initial conditions
@@ -111,7 +108,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
 
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
-    println(Tset,xBset)
+    # println(Tset,xBset)
     heat_ss,flow_ss,mpclook=findSS_all(T0_in,Tset,xBset,n,print=print)
 
 
@@ -245,6 +242,8 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
 
 end
 
+# SetChange_xB = [1xN]
+
 function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     dist_time,setpoint_time,initial_values;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
     # (runs the moving horizon loop for set point tracking)
@@ -365,10 +364,18 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         end
         # Configuration tracking
         # setpoint tracking
+
+        # TODO implement this
+        # setPointWeWant = -1
+        # for i in setpoint_time
+        #     if setppoint_time[i] >= tt
+        #         setPointWeWant = i
+        #         break
+
+
         for i=1:N
-            j=Int(ll)
-            # println("j=",j)
-            while j>=0
+            j=Int(ll) # j is number of times we change setpoint
+            while j>=0 #
                 if j==0
                     xBsetpoint[i,tt+1]=xBs[i]
                     Tsetpoint[i,tt+1]=Ts[i]
@@ -376,8 +383,8 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
                     break
                 end
                 if tt>=setpoint_time[j]
-                    xBsetpoint[i,tt+1]=xBs[i]+SetChange_xB[i,j]
-                    Tsetpoint[i,tt+1]=Ts[i]+SetChange_T[i,j]
+                    xBsetpoint[i,tt+1]=xBs[i]+SetChange_xB[j,i]
+                    Tsetpoint[i,tt+1]=Ts[i]+SetChange_T[i]
                     adjacentM[:,:,tt+1]=n2
                     # if j==2
                     #     adjacentM[:,:,tt+1]=n2
@@ -427,7 +434,6 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     b3 = zeros(count)
     b4 = zeros(count)
     for t = 2:count
-        #TODO xBs[1] is wrong
         s += [sum(q_xB*(xBtvt[t] - xBsetpoint[end,t])^2), q_T*sum((Tvt[i,t]-Ts[i])^2 for i=1:N), r_flow*sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1),
                 r_heat*sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
         b[t] = b[t-1] + q_xB*sum((xBtvt[t] - xBsetpoint[end,t])^2) + q_T*sum((Tvt[i,t]-Ts[i])^2 for i=1:N) + r_flow*sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1) + r_heat*sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N)
@@ -445,11 +451,10 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         end
 
     end
-    #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
     println("writing performance to file")
-    top_file = out_dir * "\\3R parallel to 2and1 parallel +0.12.txt"
-    top_excel_file = out_dir * "\\3R parallel to parallel -0.05.xlsx"
+    top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".txt"
+    top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".xlsx"
     touch(top_file)
     file = open(top_file, "w")
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
@@ -588,30 +593,27 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
 end
 
 
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Setpoint Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
-R3_parallel = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-R3_mixing = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
-disturbances = [10 10; 0 0; 0 0]
+parallel_3R = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+series_3R = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0] #TODO Yi please check this
+parallel_2_and_1_3R = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+mixing_3R = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
+initial_conditions = repeat([300 388.7 0.11],size(parallel_3R)[1] - 1)
+initial_conditions_3R_series = [300 370 0.055;300 380 0.08; 300 388.7 0.11] # 3R series
+initial_conditions_3R_2_and_1 = [300 370 0.055;300 388.7 0.11; 300 388.7 0.11] # 3R 2and1 parallel
+initial_conditions_3R_mixing = [300 370 0.055;300 370 0.055; 300 388.7 0.11] # 3R mixing
+disturbances = [0 0; 0 0; 0 0]
 
-initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
 # MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
 #     initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
 # top_ten = permutate_weights(out_dir, disturbances)
-top= permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=25)
-# top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
-#                     0.01	100000.0	1.0e11	0.001	1.0e9	0.005476772796985585	214532.18323354874	4.918302353195665e-6	349513.81350522436	0.005476772796985585
-#                     0.01	100000.0	1.0e10	1.0000000000000002e-6	1.0e9	0.007322597410352353	109371.49364775658	3.485568289844138e-5	2.62339968185887e6	0.007322597410352353
-#                     0.01	100000.0	1.0e11	1.0000000000000002e-6	1.0e8	0.007588939087214402	158621.9501849207	1.551582794482276e-5	1.0411854487997093e6	0.007588939087214402
-#                     0.01	100000.0	1.0e11	1.0000000000000001e-7	1.0e9	0.010370141909242752	125577.67343643718	4.315955026410419e-5	3.006275735352627e6	0.010370141909242752
-#                     0.01	100000.0	1.0e11	1.0e-5	1.0e7	0.010539706883296545	210056.02263620676	1.5477335065790005e-5	1.7222644535647202e6	0.010539706883296545
-#                     0.01	100000.0	1.0e10	0.001	1.0e7	0.015604859673570717	145742.95127396716	1.950668784567637e-5	2.104809944045778e6	0.015604859673570717
-#                     0.01	100000.0	1.0e10	0.001	1.0e8	0.016582382266799704	133381.66374726084	2.601153486813718e-5	2.0605073022839876e6	0.016582382266799704
-#                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
-#                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
+permutate_setpoint(out_dir, parallel_3R, mixing_3R, [0 0; 0 0; 0 0], initial_conditions,
+    initial_conditions_3R_mixing, [0 0 1])
+
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
-save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)
+# save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R
