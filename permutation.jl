@@ -331,3 +331,48 @@ function save_profile_images_permutation_setpoints(inputMatrix, n1,n2, reactors_
         count += 1
     end
 end
+
+# format: 1->3,2->3,
+# arrow shows reactor connection, comma indicates end of connection
+# questions: do we assume all reactors have input feeds?
+# do all reactors that don't feed another reactor have output?
+
+function configuration_text_to_matrix(configuration_text, num_reactors)
+    m = zeros(Int64, num_reactors + 1, num_reactors + 1)
+    io = IOBuffer(configuration_text)
+    io2 = deepcopy(io)
+    fromReactor = 0
+    while !eof(io2)
+        # println("start")
+        try
+            r = parse(Int64, readuntil(io2, "->"))
+            fromReactor = r
+            io = deepcopy(io2)
+            # println("a")
+            continue
+        catch e
+            # println(e,"e1")
+        end
+        io2 = deepcopy(io)
+        try
+            r = parse(Int64, readuntil(io2, ","))
+            # println("b")
+            io = deepcopy(io2)
+            m[fromReactor,r] = 1
+            continue
+        catch e
+            # println("e2")
+        end
+    end
+    for i in 1:num_reactors
+        if m[i,:] == zeros(Int64, num_reactors + 1)
+            m[i,num_reactors+1] = 1
+        end
+        m[num_reactors+1, i] = 1
+    end
+    return m
+end
+
+function configuration_matrix_to_text(configuration_matrix)
+    return "0"
+end
