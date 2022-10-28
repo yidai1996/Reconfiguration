@@ -455,6 +455,8 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     println("writing performance to file")
     top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".txt"
     top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".xlsx"
+    # top_file = out_dir * "\\SetChange_xB=" * string(Dist_T0[1]) * ".txt"
+    # top_excel_file = out_dir * "\\SetChange_xB=" * string(Dist_T0[1]) * ".xlsx"
     touch(top_file)
     file = open(top_file, "w")
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
@@ -609,7 +611,12 @@ disturbances = [0 0; 0 0; 0 0]
 # MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
 #     initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
 # top_ten = permutate_weights(out_dir, disturbances)
+#TODO move files, do 2_and_1 and series
 permutate_setpoint(out_dir, parallel_3R, mixing_3R, [0 0; 0 0; 0 0], initial_conditions,
+    initial_conditions_3R_mixing, [0 0 1])
+
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Temp_in permutations\\"
+permutate_temp_in(out_dir, parallel_3R, series_3R, [0 0; 0 0; 0 0], initial_conditions,
     initial_conditions_3R_mixing, [0 0 1])
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
