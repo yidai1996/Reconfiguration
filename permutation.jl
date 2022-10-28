@@ -332,33 +332,22 @@ function save_profile_images_permutation_setpoints(inputMatrix, n1,n2, reactors_
     end
 end
 
-# format: 1->3,2->3,
-# ,
-# arrow shows reactor connection, comma indicates end of connection
+# format: 1-3,2-3 (mixing configuration)
+# a single dash (-) denotes parallel reactors
+# 1-3 shows reactor connection from reactor 1 to reactor 3
+# comma separates connections
 
 function configuration_text_to_matrix(configuration_text, num_reactors)
     m = zeros(Int64, num_reactors + 1, num_reactors + 1)
-    io = IOBuffer(configuration_text)
-    io2 = deepcopy(io)
-    fromReactor = 0
-    while !eof(io2)
-        try
-            r = parse(Int64, readuntil(io2, "-}"))
-            fromReactor = r
-            io = deepcopy(io2)
-            println(fromReactor)
-            continue
-        catch e
-        end
-        io2 = deepcopy(io)
-        try
-            r = parse(Int64, readuntil(io2, ","))
-            io = deepcopy(io2)
-            m[fromReactor,r] = 1
-            continue
-        catch e
+    if configuration_text != "-"  # if not parallel
+        comma_split = split(configuration_text, ",")
+        for connection in comma_split
+            dash_split = split(connection, "-")
+            m[parse(Int64, dash_split[1]),parse(Int64, dash_split[2])] = 1
         end
     end
+
+    # assuming all reactors have inputs and outputs
     for i in 1:num_reactors
         if m[i,:] == zeros(Int64, num_reactors + 1)
             m[i,num_reactors+1] = 1
@@ -369,5 +358,22 @@ function configuration_text_to_matrix(configuration_text, num_reactors)
 end
 
 function configuration_matrix_to_text(configuration_matrix)
-    return "0"
+    num_reactors = size(configuration_matrix)[1] - 1
+    has_connections = false
+    configuration_text = ""
+    for i in 1:num_reactors
+        for j in 1:num_reactors
+            if configuration_matrix[i,j] == 1
+                if has_connections
+                    configuration_text *= ","
+                end
+                has_connections = true
+                configuration_text *= string(i) * "-" * string(j)
+            end
+        end
+    end
+    if length(configuration_text) == 0
+        configuration_text *= "-"
+    end
+    return configuration_text
 end
