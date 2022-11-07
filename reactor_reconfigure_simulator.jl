@@ -4,7 +4,7 @@
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
-include("permutation.jl")
+# include("permutation.jl")
 
 function loadProcessData(N::Int,n,initial_values;print=true)
     # global F0=9/3600/N #m^3/s
@@ -12,7 +12,8 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     # Parallel
     # global V=[Vlittle Vlittle Vlittle Vlittle] #m^3
     # global V=[Vlittle Vlittle Vlittle 0.5] #m^3
-    global V=[Vlittle Vlittle Vlittle] #m^3
+    # global V=[Vlittle Vlittle Vlittle ] #m^3
+    global V=[Vlittle Vlittle Vlittle Vlittle] #m^3
     # global V=0.5/3 #m^3
     global d_H1=-6e4 #KJ/kmol
     global d_H2=-7e4 #KJ/kmol
@@ -26,11 +27,20 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     global R_gas=8.314 #KJ/kmol/K
     global xA0=1
     global xB0=0
+    # 4R parallel
+    global T0=[300 300 300 300]
+    global Ts=[388.7 388.7 388.7 388.7]
+    global xBs=[0.11 0.11 0.11 0.11]
+    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
     # 3R parallel
-    global T0=[300 300 300]
-    global Ts=[388.7 388.7 388.7]
-    global xBs=[0.11 0.11 0.11]
-    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+    # global T0=[300 300 300]
+    # global Ts=[388.7 388.7 388.7]
+    # global xBs=[0.11 0.11 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+    # global T0=[300 300]
+    # global Ts=[388.7 388.7]
+    # global xBs=[0.11 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2]]
     # 3R 2&1parallel
     # global T0=[300 300 300]
     # global Ts=[370 388.7 388.7]
@@ -101,14 +111,17 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
 
     K=round(Int,P/dt)
 
-    # MPC=Model(Ipopt.Optimizer)
-    MPC=Model(() -> BARON.Optimizer(MaxTime=10000))
+    MPC=Model(Ipopt.Optimizer)
+    # MPC=Model(() -> BARON.Optimizer(MaxTime=10000))
     MOI.set(MPC, MOI.RawOptimizerAttribute("print_level"), 1)
 
     T0_in=T0_inreal
     T_0=T_0real
     xA_0=xA_0real
     xB_0=xB_0real
+    println("T0_in=",T0_in)
+    println("T0_0=",T_0)
+    println("xB=",xB_0)
 
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
@@ -162,6 +175,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
             xB_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
         end
         xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+        # Tt_guess[k+1]=sum((n[i,N+1])*Flow[i,N+1]*T_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
 
     if print
@@ -197,7 +211,6 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
-
     @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
     JuMP.optimize!(MPC)
 
@@ -448,20 +461,22 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     end
     #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
-    println("writing performance to file")
-    top_file = out_dir * "\\3R parallel to series +15K.txt"
-    top_excel_file = out_dir * "\\3R parallel to series +15K.xlsx"
-    touch(top_file)
-    file = open(top_file, "w")
-    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
-    # write to text file
-    write(file, join(column_names, "\t") * "\n")
-    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
-    writedlm(file, data)
-    # write to excel file
-    XLSX.writetable(top_excel_file, data, column_names)
-    close(file)
+    # println("writing performance to file")
+    # top_file = out_dir * "\\Original T4_10K.txt"
+    # top_excel_file = out_dir * "\\Original T4_10K.xlsx"
+    # touch(top_file)
+    # file = open(top_file, "w")
+    # # column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
+    # column_names = ["times","xBset","T01","T02", "T03","T04", "Tvt1","Tvt2","Tvt3","Tvt4", "xBvt1","xBvt2","xBvt3", "xBvt4","xBtvt", "flowvt1", "flowvt2","flowvt3","flowvt4","heatvt1","heatvt2","heatvt3","heatvt4", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
+    # # write to text file
+    # write(file, join(column_names, "\t") * "\n")
+    # # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
+    # # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],T0_invt[4,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],Tvt[4,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBvt[4,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],flowvt[N+1,4,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],heatvt[4,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+    # writedlm(file, data)
+    # # write to excel file
+    # XLSX.writetable(top_excel_file, data, column_names)
+    # close(file)
 
     return s
 
@@ -590,16 +605,17 @@ end
 
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
-out_dir = "G:\\My Drive\\Research\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Disturbance tracking"
-adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-disturbances = [10 10; 0 0; 0 0]
+# out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\BARON\\symmetrybreaking"
+out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT\\With adjacency matrix\\4R"
+# adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+# disturbances = [10 10; 0 0; 0 0]
 
-initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
+# initial_conditions = repeat([300 388.7 0.11],size(adjacencies)[1] - 1)
 
 # MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
 #     initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
 # top_ten = permutate_weights(out_dir, disturbances)
-top= permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=25)
+# top= permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_permutations=25)
 # top_ten_hardcoded = [0.01	100000.0	1.0e11	0.0001	1.0e6	4.5902784576657645e-6	44.67795862520155	2.13733858592185e-6	7402.168692236633	4.5902784576657645e-6
 #                     0.01	100000.0	1.0e11	0.001	1.0e9	0.005476772796985585	214532.18323354874	4.918302353195665e-6	349513.81350522436	0.005476772796985585
 #                     0.01	100000.0	1.0e10	1.0000000000000002e-6	1.0e9	0.007322597410352353	109371.49364775658	3.485568289844138e-5	2.62339968185887e6	0.007322597410352353
@@ -611,7 +627,7 @@ top= permutate_initial_conditions(out_dir, adjacencies, disturbances; num_final_
 #                     0.01	100000.0	1.0e11	0.0001	1.0e7	0.018010298125712493	261604.21391037246	1.1886056482999412e-5	943948.8612134649	0.018010298125712493
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
-save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)
+# save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R
