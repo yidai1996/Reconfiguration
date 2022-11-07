@@ -4,6 +4,9 @@ MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],1,1e7,1e7,1e-5,
 3R mixing
 MPC_tracking([0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],1,1e7,1e7,1e-5,1e7,90,1000,[8 15];tmax=5000)
 
+3R 2 branches parallel
+[0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+
 4R Parallel
 adjacent = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
 disturbances = [0 0; 0 0; 0 0; 0 0]
@@ -22,3 +25,4 @@ Examples when +0.01 on xBt
 MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],[-0.055;-0.03;0.01],[-18.7;-8.7;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],15,[300 388.7 0.11];tmax=6000,save_plots=true,plot_name="parallel to series +0.01.png")
 3R parallel to mixing
 MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],[-0.055;-0.055;0.01],[-18.7;-18.7;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],15,[300 388.7 0.11];tmax=6000,save_plots=true,plot_name="parallel to mixing +0.01.png")
+
