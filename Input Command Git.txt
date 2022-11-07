@@ -11,3 +11,18 @@ MPC_tracking([0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],1,1e7,1e7,1e-5,
 adjacent = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
 disturbances = [0 0; 0 0; 0 0; 0 0]
 MPC_tracking(adjacent, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000)
+
+Update 09/27
+Reconfiguration with setpoint/disturbance tracking
+Examples when +0.11 on xBt
+3R parallel to parallel
+MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],[0;0;0.11],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],15,[300 388.7 0.11];tmax=6000,save_plots=true,plot_name="parallel to parallel +0.11.png")
+3R parallel to 2 and 1 parallel
+MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],[-0.055;0;0.11],[-18.7;0;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],15,[300 388.7 0.11];tmax=6000,save_plots=true,plot_name="parallel to 2and1 parallel +0.11.png")
+
+Examples when +0.01 on xBt
+3R parallel to series
+MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],[-0.055;-0.03;0.01],[-18.7;-8.7;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],15,[300 388.7 0.11];tmax=6000,save_plots=true,plot_name="parallel to series +0.01.png")
+3R parallel to mixing
+MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],[-0.055;-0.055;0.01],[-18.7;-18.7;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],15,[300 388.7 0.11];tmax=6000,save_plots=true,plot_name="parallel to mixing +0.01.png")
+

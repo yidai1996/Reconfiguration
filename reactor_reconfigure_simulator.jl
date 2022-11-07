@@ -1,10 +1,10 @@
 # For any given number of reactors and potential configurations
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
-include("permutation.jl")
+# include("permutation.jl")
 
 function loadProcessData(N::Int,n,initial_values;print=true)
     # global F0=9/3600/N #m^3/s
@@ -12,7 +12,8 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     # Parallel
     # global V=[Vlittle Vlittle Vlittle Vlittle] #m^3
     # global V=[Vlittle Vlittle Vlittle 0.5] #m^3
-    global V=[Vlittle Vlittle Vlittle] #m^3
+    # global V=[Vlittle Vlittle Vlittle ] #m^3
+    global V=[Vlittle Vlittle Vlittle Vlittle] #m^3
     # global V=0.5/3 #m^3
     global d_H1=-6e4 #KJ/kmol
     global d_H2=-7e4 #KJ/kmol
@@ -26,11 +27,20 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     global R_gas=8.314 #KJ/kmol/K
     global xA0=1
     global xB0=0
+    # 4R parallel
+    global T0=[300 300 300 300]
+    global Ts=[388.7 388.7 388.7 388.7]
+    global xBs=[0.11 0.11 0.11 0.11]
+    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
     # 3R parallel
-    global T0=[300 300 300]
-    global Ts=[388.7 388.7 388.7]
-    global xBs=[0.11 0.11 0.11]
-    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+    # global T0=[300 300 300]
+    # global Ts=[388.7 388.7 388.7]
+    # global xBs=[0.11 0.11 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+    # global T0=[300 300]
+    # global Ts=[388.7 388.7]
+    # global xBs=[0.11 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2]]
     # 3R 2&1parallel
     # global T0=[300 300 300]
     # global Ts=[370 388.7 388.7]
@@ -99,12 +109,16 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     K=round(Int,P/dt)
 
     MPC=Model(Ipopt.Optimizer)
+    # MPC=Model(() -> BARON.Optimizer(MaxTime=10000))
     MOI.set(MPC, MOI.RawOptimizerAttribute("print_level"), 1)
 
     T0_in=T0_inreal
     T_0=T_0real
     xA_0=xA_0real
     xB_0=xB_0real
+    println("T0_in=",T0_in)
+    println("T0_0=",T_0)
+    println("xB=",xB_0)
 
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
@@ -158,6 +172,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
             xB_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
         end
         xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+        # Tt_guess[k+1]=sum((n[i,N+1])*Flow[i,N+1]*T_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
 
     if print
@@ -193,7 +208,6 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
-
     @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
     JuMP.optimize!(MPC)
 
@@ -452,6 +466,10 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
 
     end
 
+
+    # top_file = out_dir * "\\Original T4_10K.txt"
+    # top_excel_file = out_dir * "\\Original T4_10K.xlsx"
+    
     println("writing performance to file")
     top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".txt"
     top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".xlsx"
@@ -459,6 +477,7 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     # top_excel_file = out_dir * "\\SetChange_xB=" * string(Dist_T0[1]) * ".xlsx"
     touch(top_file)
     file = open(top_file, "w")
+    #TODO column_names and data should be consistent with the number of units
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
     # write to text file
     write(file, join(column_names, "\t") * "\n")
@@ -595,6 +614,10 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
 end
 
 
+# out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
+# out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\BARON\\symmetrybreaking"
+# out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT\\With adjacency matrix\\4R"
+
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Setpoint Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
 parallel_3R = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
@@ -611,6 +634,7 @@ disturbances = [0 0; 0 0; 0 0]
 # MPC_tracking(adjacencies, disturbances,1,1e7,1e7,1e-3,1e9,90,1000,[8 15],
 #     initial_conditions;tmax=5000,save_plots=true,plot_name=out_dir*"plot.png")
 # top_ten = permutate_weights(out_dir, disturbances)
+
 #TODO move files, do 2_and_1 and series
 permutate_setpoint(out_dir, parallel_3R, mixing_3R, [0 0; 0 0; 0 0], initial_conditions,
     initial_conditions_3R_mixing, [0 0 1])
