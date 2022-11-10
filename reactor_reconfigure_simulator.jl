@@ -208,7 +208,8 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
-    @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    @objective(MPC,Min,sum(q_T*(T[4,k]-Tset[4])^2  for k=0:K)+1/3*sum(q_T*(T[i,k]-Tset[i])^2 for i=1:3 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+1/3*sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:3 for k=1:K-1) + sum(r_heat*(Q[4,k]-Q[4,k-1])^2 for k=1:K-1) + 1/3*(sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1)-2*sum(r_flow*(n[4,j]*F[4,j,k]-n[4,j]*F[4,j,k-1])^2 for j=1:N+1 for k=1:K-1)) + 2*sum(r_flow*(n[4,j]*F[4,j,k]-n[4,j]*F[4,j,k-1])^2 for j=1:N+1 for k=1:K-1) + 1/3*sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:3) + sum(r_heat*(Q[4,0]-Q[4,K-1])^2) + 1/3*(sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1)-2*sum(r_flow*(n[4,j]*F[4,j,0]-n[4,j]*F[4,j,K-1])^2 for j=1:N+1)) + 2*sum(r_flow*(n[4,j]*F[4,j,0]-n[4,j]*F[4,j,K-1])^2 for j=1:N+1))
     JuMP.optimize!(MPC)
 
 
@@ -397,7 +398,8 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
                     break
                 end
                 if tt>=setpoint_time[j]
-                    xBsetpoint[i,tt+1]=xBs[i]+SetChange_xB[j,i]
+                    xBsetpoint[i,tt+1]=xBs[i]+SetChange_xB[i]
+                    # xBsetpoint[i,tt+1]=xBs[i]+SetChange_xB[j,i]
                     Tsetpoint[i,tt+1]=Ts[i]+SetChange_T[i]
                     adjacentM[:,:,tt+1]=n2
                     # if j==2
@@ -467,22 +469,23 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     end
 
 
-    # top_file = out_dir * "\\Original T4_10K.txt"
-    # top_excel_file = out_dir * "\\Original T4_10K.xlsx"
-    
     println("writing performance to file")
-    top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".txt"
-    top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".xlsx"
+    top_file = out_dir * "\\Original T4_10K (identical in objfunc was divided by 3).txt"
+    top_excel_file = out_dir * "\\Original T4_10K (identical in objfunc was divided by 3).xlsx"
+    # top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".txt"
+    # top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[1,3]) * ".xlsx"
     # top_file = out_dir * "\\SetChange_xB=" * string(Dist_T0[1]) * ".txt"
     # top_excel_file = out_dir * "\\SetChange_xB=" * string(Dist_T0[1]) * ".xlsx"
     touch(top_file)
     file = open(top_file, "w")
     #TODO column_names and data should be consistent with the number of units
-    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
+    # column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
+    column_names = ["times","xBset","T01","T02", "T03", "T04","Tvt1","Tvt2","Tvt3","Tvt4", "xBvt1","xBvt2","xBvt3","xBvt4", "xBtvt", "flowvt1", "flowvt2","flowvt3","flowvt4","heatvt1","heatvt2","heatvt3","heatvt4", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
     # write to text file
     write(file, join(column_names, "\t") * "\n")
     # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],T0_invt[4,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],Tvt[4,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBvt[4,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],flowvt[N+1,4,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],heatvt[4,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
     writedlm(file, data)
     # write to excel file
     XLSX.writetable(top_excel_file, data, column_names)
@@ -636,12 +639,12 @@ disturbances = [0 0; 0 0; 0 0]
 # top_ten = permutate_weights(out_dir, disturbances)
 
 #TODO move files, do 2_and_1 and series
-permutate_setpoint(out_dir, parallel_3R, mixing_3R, [0 0; 0 0; 0 0], initial_conditions,
-    initial_conditions_3R_mixing, [0 0 1])
-
-out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Temp_in permutations\\"
-permutate_temp_in(out_dir, parallel_3R, series_3R, [0 0; 0 0; 0 0], initial_conditions,
-    initial_conditions_3R_mixing, [0 0 1])
+# permutate_setpoint(out_dir, parallel_3R, mixing_3R, [0 0; 0 0; 0 0], initial_conditions,
+#     initial_conditions_3R_mixing, [0 0 1])
+#
+# out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Temp_in permutations\\"
+# permutate_temp_in(out_dir, parallel_3R, series_3R, [0 0; 0 0; 0 0], initial_conditions,
+#     initial_conditions_3R_mixing, [0 0 1])
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
 # save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)

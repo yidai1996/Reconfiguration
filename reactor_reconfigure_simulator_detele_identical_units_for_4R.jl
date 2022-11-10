@@ -232,8 +232,8 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,New+1]*F[i,New+1,k]*xB[i,k+1] for i=1:New)/sum(n[i,New+1]*F[i,New+1,k] for i=1:New)
         # OutputMoleFraction[k=0:K-1], xBt[k+1] == (3*F[1,3,k]*xB[1,k+1]+F[2,3,k]*xB[2,k+1])/(3*F[1,3,k]+F[2,3,k])
     end
-    # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1))
-    @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(2*q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1))
+    @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1))
+    # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(2*q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K) + sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1))
     JuMP.optimize!(MPC)
 
 
@@ -409,8 +409,9 @@ function MPC_solve2(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_
     end
     # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1))
     # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+2*sum(q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1)) # gives the same figure but not the same C ISE
-    # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+2*sum(q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1) + (sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1)) )
-    @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+2*sum(q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1) + (sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1)) +(sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1)) )
+    # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+2*sum(q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1) + (sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + 2*sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + 2*sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1)) )
+    # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+2*sum(q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1) + 2*sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + 2*(sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1)) )
+    @objective(MPC,Min,sum(q_T*(T[2,k]-Tset[2])^2 for i=1:New for k=0:K)+3*sum(q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[2,k]-Q[2,k-1])^2 for k=1:K-1)+3*+3*sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + 2*sum(r_flow*(n[2,j]*F[2,j,k]-n[2,j]*F[2,j,k-1])^2 for j=1:New+1 for k=1:K-1) + 4*sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[2,0]-Q[2,K-1])^2 for i=1:New) + 3*sum(r_heat*(Q[1,0]-Q[1,K-1])^2 for i=1:New) + 2*sum(r_flow*(n[2,j]*F[2,j,0]-n[2,j]*F[2,j,K-1])^2 for j=1:New+1) + 4*sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1) )
 
     # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(q_T*(T[1,k]-Tset[1])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1) + (sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1)) )
     # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1) + (sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[1,0]-Q[1,K-1])^2) + sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1)) )
@@ -460,155 +461,7 @@ function MPC_solve2(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_
     return results_heat0, results_flow0
 
 end
-# function MPC_solve2(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
-#     println("n=",n)
-#     global count
-#     New=size(n)[1]-1
-#     K=round(Int,P/dt)
-#     MPC=Model(Ipopt.Optimizer)
-#     # MPC=Model(() -> BARON.Optimizer(MaxTime=10000))
-#     MOI.set(MPC, MOI.RawOptimizerAttribute("print_level"), 1)
-#
-#     if size(n)[1]==N+1
-#         T0_in=T0_inreal
-#         T_0=T_0real
-#         xA_0=xA_0real
-#         xB_0=xB_0real
-#     else
-#         T0_in=[T0_inreal[1],T0_inreal[end]]
-#         T_0=[T_0real[1],T_0real[end]]
-#         xA_0=[xA_0real[1],xA_0real[end]]
-#         xB_0=[xB_0real[1],xB_0real[end]]
-#         println("Eliminate the identical units")
-#         println("T0_in=",T0_in)
-#         println("T0_0=",T_0)
-#         println("xB=",xB_0)
-#     end
-#
-#     if size(n)[1]==N+1
-#         heat_ss,flow_ss,mpclook=findSS_all(T0_in,Tset,xBset,n,print=print)
-#     else
-#         heat_ss,flow_ss,mpclook=findSS_all(T0_in,[Tset[1] Tset[end]],[xBset[1] xBset[end]],n,print=print)
-#     end
-#     if print
-#         println("Heat_ss=",heat_ss)
-#         println("Flow_ss=",flow_ss)
-#         println(mpclook)
-#     end
-#
-#     for k=1:length(mpclook)
-#         for i=1:New+1
-#             for j=1:New+1
-#                 if mpclook[k][1]==i&&mpclook[k][2]==j
-#                     if flow_ss[k]<0
-#                         Flow[i,j]=1e-7
-#                     else  Flow[i,j]=flow_ss[k]
-#                     end
-#                 end
-#             end
-#         end
-#     end
-#     for i=1:New
-#         if heat_ss[i]<0
-#             heat_ss[i]=1e-7
-#         end
-#     end
-#
-#     if print
-#         println("Flow=",Flow)
-#     end
-#
-#     xA_guess=zeros(New,K+1)
-#     xB_guess=zeros(New,K+1)
-#     T_guess=zeros(New,K+1)
-#     for i=1:New
-#         xA_guess[i,1]=xA_0[i]
-#         xB_guess[i,1]=xB_0[i]
-#         T_guess[i,1]=T_0[i]
-#     end
-#     xB_tot_guess=zeros(K+1)
-#     xB_tot_guess[1]=(3*Flow[1,New+1]*xB_guess[1,1]+Flow[2,New+1]*xB_guess[2,1])/(3*Flow[1,New+1]+Flow[2,New+1])
-#
-#     for k=1:K
-#         for i=1:New
-#             T_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*T_guess[j,k] for j=1:New) + n[New+1,i]*Flow[New+1,i]*T0_in[i]- sum(n[i,j]*Flow[i,j]*T_guess[i,k] for j=1:New+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V[i])*dt + T_guess[i,k]
-#             xA_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:New) + n[New+1,i]*Flow[New+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:New+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
-#             xB_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:New) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:New+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
-#         end
-#         xB_tot_guess[k+1]=(3*Flow[1,3]*xB_guess[1,k+1]+Flow[2,3]*xB_guess[2,k+1])/(3*Flow[1,3]+Flow[2,3])
-#     end
-#
-#     if print
-#         println("xB_guess=",xB_guess)
-#         println("xBt_guess=",xB_tot_guess)
-#     end
-#
-#     JuMP.@variables MPC begin
-#         Q[i=1:New,k=0:K-1], (lower_bound=0, upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
-#         F[i=1:New+1,j=1:New+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=n[i,j]*(1+Flow[i,j]),start=Flow[i,j])# Flowrate between reactors
-#         T[i=1:New,k=0:K], (lower_bound=T0[i],upper_bound=2000,start=T_guess[i,k+1])
-#         xA[i=1:New,k=0:K], (lower_bound=0, upper_bound=1,start=xA_guess[i,k+1])
-#         xB[i=1:New,k=0:K], (lower_bound=0, upper_bound=1,start=xB_guess[i,k+1])
-#         xBt[k=0:K], (lower_bound=0, upper_bound=1,start=xB_tot_guess[k+1])
-#     end
-#
-#     @constraints MPC begin
-#         T_init[i=1:New], T[i,0]==T_0[i]
-#         xA_init[i=1:New], xA[i,0]==xA_0[i]
-#         xB_init[i=1:New], xB[i,0]==xB_0[i]
-#         xBt_init, xBt[0]==(3*Flow[1,3]*xB_0[1]+Flow[2,3]*xB_0[2])/(3*Flow[1,3]+Flow[2,3])
-#         # xBt_init, xBt[0]==sum(n[i,New+1]*Flow[i,New+1]*xB_0[i] for i=1:New)/sum(n[i,New+1]*Flow[i,New+1] for i=1:New)
-#         MassB[i=1:New,k=0:K-1], sum(n[j,i]*F[j,i,k] for j=1:New+1)==sum(n[i,j]*F[i,j,k] for j=1:New+1)
-#     end
-#
-#     @NLconstraints MPC begin
-#         Temp[i=1:New,k=0:K-1], T[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*T[j,k] for j=1:New) + n[New+1,i]*F[New+1,i,k]*T0_in[i]- sum(n[i,j]*F[i,j,k]*T[i,k] for j=1:New+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V[i])*dt + T[i,k]
-#         MoleFractionxA[i=1:New,k=0:K-1], xA[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xA[j,k] for j=1:New) + n[New+1,i]*F[New+1,i,k]*xA0 - sum(n[i,j]*F[i,j,k]*xA[i,k] for j=1:New+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
-#         MoleFractionxB[i=1:New,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:New) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:New+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
-#         # OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,New+1]*F[i,New+1,k]*xB[i,k+1] for i=1:New)/sum(n[i,New+1]*F[i,New+1,k] for i=1:New)
-#         OutputMoleFraction[k=0:K-1], xBt[k+1] == (3*F[1,3,k]*xB[1,k+1]+F[2,3,k]*xB[2,k+1])/(3*F[1,3,k]+F[2,3,k])
-#     end
-#     # @objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:New for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1))
-#     @objective(MPC,Min,sum(3*q_T*(T[1,k]-Tset[1])^2 + q_T*(T[2,k]-Tset[2])^2 for k=0:K) +sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:New for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:New) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:New+1 for j=1:New+1) + 2*sum(r_heat*(Q[1,k]-Q[1,k-1])^2 for k=1:K-1) + 2*sum(r_flow*(n[1,j]*F[1,j,k]-n[1,j]*F[1,j,k-1])^2 for j=1:New+1 for k=1:K-1) + 2*sum(r_flow*(n[i,1]*F[i,1,k]-n[i,1]*F[i,1,k-1])^2 for i=1:New+1 for k=1:K-1) + 2*r_heat*(Q[1,0]-Q[1,K-1])^2  + 2*sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1) + 2*sum(r_flow*(n[j,1]*F[j,1,0]-n[j,1]*F[j,1,K-1])^2 for j=1:New+1) + 2*sum(r_flow*(n[1,j]*F[1,j,0]-n[1,j]*F[1,j,K-1])^2 for j=1:New+1))
-#     JuMP.optimize!(MPC)
-#
-#
-#     st=MathOptInterface.RawStatusString()
-#     if st=="INFEASIBLE_POINT"
-#         println(xA1_guess,xA2_guess)
-#         error("Solver infeasible, problem stopping")
-#     end
-#     # obj=getobjectivevalue(MPC) # works for Julia 1.15.3
-#     obj=objective_value(MPC) # works for Julia 1.17.2
-#     if print
-#         println("Obj in MPC=",obj)
-#     end
-#
-#     results_T=JuMP.value.(T)
-#     # println("results_T=",results_T)
-#     results_xB=JuMP.value.(xB)
-#     # println("results_xB=",results_xB)
-#     results_xBt=JuMP.value.(xBt)
-#     # println("results_xBt=",results_xBt)
-#     results_heat = JuMP.value.(Q)
-#     # println("results_heat=",results_heat)
-#     results_flow = JuMP.value.(F)
-#     # println("results_flow=",results_flow)
-#     results_heat0 = JuMP.value.(Q[:,0])
-#     results_flow0 = JuMP.value.(F[:,:,0])
-#
-#     obj_T=sum(q_T*(results_T[i,k]-Tset[i])^2 for i=1:New for k=0:K)
-#     obj_xBt=sum(q_xB*(results_xBt[k]-xBset[end])^2 for k=0:K)
-#     obj_Q=sum(r_heat*(results_heat[i,k]-results_heat[i,k-1])^2 for i=1:New for k=1:K-1)+sum(r_heat*(results_heat[i,0]-results_heat[i,K-1])^2 for i=1:New)
-#     obj_F=sum(r_flow*(n[i,j]*results_flow[i,j,k]-n[i,j]*results_flow[i,j,k-1])^2 for i=1:New+1 for j=1:New+1 for k=1:K-1)+sum(r_flow*(n[i,j]*results_flow[i,j,0]-n[i,j]*results_flow[i,j,K-1])^2 for i=1:New+1 for j=1:New+1)
-#
-#     if print
-#         println("soln_heat=",results_heat0)
-#         println("soln_flow=",results_flow0)
-#     end
-#     return results_heat0, results_flow0
-#
-# end
+
 
 function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
     dist_time,setpoint_time,initial_values;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
@@ -784,32 +637,7 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         times[tt+1]=times[tt]+dt
         count=count+1
     end
-    # Expand to 3R system
-    # global Tvtnew=zeros(N+1,time_steps+1)
-    # global xAvtnew=zeros(N+1,time_steps+1)
-    # global xBvtnew=zeros(N+1,time_steps+1)
-    # global heatvtnew=zeros(N+1,time_steps+1)
-    # global flowvtnew=zeros(N+1,time_steps+1)
-    # global xBtvtnew=zeros(1,time_steps+1)
-    # global T0_invtnew=zeros(N+1,time_steps+1)
 
-    # Tvtnew[1,:]=Tvt[1,:]
-    # Tvtnew[2,:]=Tvt[1,:]
-    # Tvtnew[3,:]=Tvt[2,:]
-    # xBvtnew[1,:]=xBvt[1,:]
-    # xBvtnew[2,:]=xBvt[1,:]
-    # xBvtnew[3,:]=xBvt[2,:]
-    # heatvtnew[1,:]=heatvt[1,:]
-    # heatvtnew[2,:]=heatvt[1,:]
-    # heatvtnew[3,:]=heatvt[2,:]
-    # flowvtnew[1,:]=flowvt[1,N+1,:]
-    # flowvtnew[2,:]=flowvt[1,N+1,:]
-    # flowvtnew[3,:]=flowvt[2,N+1,:]
-    # T0_invtnew[1,:]=T0_invt[1,:]
-    # T0_invtnew[2,:]=T0_invt[1,:]
-    # T0_invtnew[3,:]=T0_invt[2,:]
-    # xBtvtnew=xBtvt
-     # have to reshape because plot accepts a matrix not a vector, also must be 1xN not Nx1
     label = reshape(["R$i" for i in 1:N+1],1,N+1)
     if print || save_plots
         p1=plot(times,transpose(T0_invt),xlabel="Time (s)",label=label,ylabel="Input Temperature")
@@ -860,8 +688,8 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
     println("writing performance to file")
-    top_file = out_dir * "\\Deleted identical unit by 2 adjacentMs code T4_10K.txt"
-    top_excel_file = out_dir * "\\Deleted identical unit by 2 adjacentMs code T4_10K.xlsx"
+    top_file = out_dir * "\\Compensating all by disturbed plus 3 times undisturbed.txt"
+    top_excel_file = out_dir * "\\Compensating all by disturbed plus 3 times undisturbed.xlsx"
     touch(top_file)
     file = open(top_file, "w")
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
