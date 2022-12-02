@@ -327,9 +327,9 @@ function permutate_temp_in(out_dir, n1, n2, Dist_T0, initial_conditions, reconfi
     # Nxm matrix where N is number of reactors and m is number of initial conditions
 
 
-    num_permutations = 19
+    num_permutations = 81
     SetChange_xB = [0.15 0.15 0.15] .* reactors_to_permutate
-    step_size = repeat([0.01 0.01], N)
+    step_size = repeat([1.0 1.0], N)
     SetChange_T = [reconfiguration_conditions[i,2] - initial_conditions[i,2] for i in 1:N]
 
     # normalizing constants make the different fields factor equally into the sums
