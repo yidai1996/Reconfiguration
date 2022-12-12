@@ -112,7 +112,7 @@ function save_profile_images_permutations(inputMatrix, disturbances, out_dir)
         r_heat = row[4]
         r_flow = row[5]
         image_name = join(row[1:5], "_")
-        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
+        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".pdf")
         MPC_tracking([0 0 1 1;0 0 1 1], disturbances,q_T,q_xA,q_xB,r_heat,r_flow,90,1000,[8 15];tmax=5000, print=false, save_plots=true, plot_name=image_name)
         count += 1
     end
@@ -257,7 +257,7 @@ function save_profile_images_initial_conditions(inputMatrix, adjacencies, distur
     count = 1
     for row in eachrow(inputMatrix)
         image_name = join(row[1:3], "_")
-        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
+        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".pdf")
         N = size(adjacencies)[1] - 1
         original_values = repeat([300 388.7 0.11],N)
         initial_values = original_values .+ transpose(row[1:3])
@@ -303,7 +303,7 @@ function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconf
         unique_permutations += 1
         SetChange_xB = SetChange_xB .+ step_size
         # print("SetChange_xB: " * string(SetChange_xB))
-        image_name = (out_dir * "\\Perm_SetChange_xB" * string(SetChange_xB[3]) * ".png")
+        image_name = (out_dir * "\\Perm_SetChange_xB" * string(SetChange_xB[3]) * ".pdf")
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
         discrepancies = MPC_tracking(n1,n2,Dist_T0,SetChange_xB,SetChange_T,
         1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,initial_conditions;tmax=5000, print=false,
@@ -351,7 +351,7 @@ function permutate_temp_in(out_dir, n1, n2, Dist_T0, initial_conditions, reconfi
         unique_permutations += 1
         Dist_T0 = Dist_T0 .+ step_size
         # print("SetChange_xB: " * string(SetChange_xB))
-        image_name = (out_dir * "\\Perm_Dist_TO" * string(Dist_T0[1]) * ".png")
+        image_name = (out_dir * "\\Perm_Dist_TO" * string(Dist_T0[1]) * ".pdf")
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
         discrepancies = MPC_tracking(n1,n2,Dist_T0,SetChange_xB,SetChange_T,
         1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,initial_conditions;tmax=5000, print=false,
@@ -371,7 +371,7 @@ function save_profile_images_permutation_setpoints(inputMatrix, n1,n2, reactors_
     count = 1
     for row in eachrow(inputMatrix)
         image_name = join(row[1:3], "_")
-        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".png")
+        image_name = (out_dir * "\\Perm" * string(count) * "_" * image_name * ".pdf")
         N = size(adjacencies)[1] - 1
         original_values = repeat([300 388.7 0.11],N)
         initial_values = original_values .+ transpose(row[1:3])
