@@ -3,7 +3,7 @@
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
-# include("more_reactor_reconfigure_combination_xB_compacted_deleteuselesssyntax_v7.jl")
+include("reactor_reconfigure_simulator.jl")
 
 function permutate_weights(out_dir, disturbances)
     original_weights = [1,1e7,1e7,1e-5,1e7]
@@ -269,8 +269,8 @@ end
 
 # changes the configuration in the middle of running, permutates only xBs' from 0.26-0.46
 # reactors to permutate is the list of reactor numbers to permutate xBs' on
-function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconfiguration_conditions,
-    reactors_to_permutate)
+function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconfiguration_conditions)#=,
+    reactors_to_permutate)=#
     # TODO rewrite the code below for permuting setpoints
     # TODO hardcode SetChange_xB for 0.16-0.36
     N = size(n1)[1] - 1
@@ -278,22 +278,22 @@ function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconf
     # Nxm matrix where N is number of reactors and m is number of initial conditions
 
 
-    num_permutations = 19
+    num_permutations = 9
+    # num_permutations = 29
+    SetChange_xB=zeros(1,N)
+    SetChange_T=zeros(1,N)
+    
 
-    SetChange_xB = [0.15 0.15 0.15] .* reactors_to_permutate
-    step_size = [0.01 0.01 0.01] .* reactors_to_permutate
-    SetChange_T = [reconfiguration_conditions[i,2] - initial_conditions[i,2] for i in 1:N]
-
+    for i=1:N
+        SetChange_xB[i] = reconfiguration_conditions[i,1] - initial_conditions[i,1]
+        SetChange_T[i] = reconfiguration_conditions[i,2] - initial_conditions[i,2]
+    end
+ 
+    step_size = [0 0 -0.01]
+    # step_size = [0 0 0.01]
+    
     # normalizing constants make the different fields factor equally into the sums
     n = 0
-    avg_xB = 0
-    xB_norm_const_test_1 = 11.085 / 1.971e-6
-    xB_norm_const_test_2 = 11.085 / 1.971e-6
-    avg_T = 0
-    avg_flow = 0
-    avg_heat = 0
-    avg_max_xB = 0
-    avg_max_xB_const_test_2 = 10.91 / 0.111299
 
     # for i in ProgressBar(10:20)
     for i in ProgressBar(0:num_permutations)
@@ -302,8 +302,9 @@ function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconf
 
         unique_permutations += 1
         SetChange_xB = SetChange_xB .+ step_size
+        println("SetChange_xB=",SetChange_xB)
         # print("SetChange_xB: " * string(SetChange_xB))
-        image_name = (out_dir * "\\Perm_SetChange_xB" * string(SetChange_xB[3]) * ".pdf")
+        image_name = (out_dir * "\\Perm_SetChange_xB" * string(SetChange_xB[end]) * ".pdf")
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
         discrepancies = MPC_tracking(n1,n2,Dist_T0,SetChange_xB,SetChange_T,
         1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,initial_conditions;tmax=5000, print=false,
