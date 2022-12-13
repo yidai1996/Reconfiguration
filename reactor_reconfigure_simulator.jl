@@ -474,12 +474,12 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     # top_excel_file = out_dir * "\\test setpoint+0.14.xlsx"
 
     # For permutate setpoint
-    top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[end]) * ".txt"
-    top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[end]) * ".xlsx"
+    # top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[end]) * ".txt"
+    # top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[end]) * ".xlsx"
 
     # For permutate disturbance
-    # top_file = out_dir * "\\SetChange_xB=" * string(Dist_T0[1]) * ".txt"
-    # top_excel_file = out_dir * "\\SetChange_xB=" * string(Dist_T0[1]) * ".xlsx"
+    top_file = out_dir * "\\Dist=" * string(Dist_T0[1,2]) * ".txt"
+    top_excel_file = out_dir * "\\Dist=" * string(Dist_T0[1,2]) * ".xlsx"
     touch(top_file)
     file = open(top_file, "w")
     #TODO column_names and data should be consistent with the number of units
@@ -626,8 +626,7 @@ end
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\BARON\\symmetrybreaking"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT\\With adjacency matrix\\4R"
 
-out_dir = "G:\\My Drive\\Research\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\SVM data\\Sam code testing"
-
+out_dir = "G:\\My Drive\\Research\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Disturbance rejection\\SVM data"
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Setpoint Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
 # parallel_3R = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
