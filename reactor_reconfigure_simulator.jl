@@ -137,7 +137,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
             for j=1:N+1
                 if mpclook[k][1]==i&&mpclook[k][2]==j
                     if flow_ss[k]<0
-                        Flow[i,j]=1e-7
+                        Flow[i,j]=0
                     else  Flow[i,j]=flow_ss[k]
                     end
                 end
@@ -626,6 +626,7 @@ end
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\BARON\\symmetrybreaking"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT\\With adjacency matrix\\4R"
 
+# out_dir = "G:\\My Drive\\Research\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\SVM data"
 out_dir = "G:\\My Drive\\Research\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Disturbance rejection\\SVM data"
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Setpoint Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"

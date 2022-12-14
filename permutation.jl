@@ -269,7 +269,7 @@ end
 
 # changes the configuration in the middle of running, permutates only xBs' from 0.26-0.46
 # reactors to permutate is the list of reactor numbers to permutate xBs' on
-function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconfiguration_conditions)#=,
+function permutate_setpoint(out_dir, n1, n2, Dist_T0, SetChange_xB, SetChange_T)#=,
     reactors_to_permutate)=#
     # TODO rewrite the code below for permuting setpoints
     # TODO hardcode SetChange_xB for 0.16-0.36
@@ -280,22 +280,16 @@ function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconf
 
     num_permutations = 9
     # num_permutations = 29
-    SetChange_xB=zeros(1,N)
-    SetChange_T=zeros(1,N)
-    
 
-    for i=1:N
-        SetChange_xB[i] = reconfiguration_conditions[i,1] - initial_conditions[i,1]
-        SetChange_T[i] = reconfiguration_conditions[i,2] - initial_conditions[i,2]
-    end
- 
-    step_size = [0 0 -0.01]
-    # step_size = [0 0 0.01]
+    println("SetChange_xB=",SetChange_xB)
+    println("SetChange_T=",SetChange_T)
+
+    step_size = [0; 0; -0.01]
+    # step_size = [0; 0; 0.01]
     
     # normalizing constants make the different fields factor equally into the sums
     n = 0
 
-    # for i in ProgressBar(10:20)
     for i in ProgressBar(0:num_permutations)
     # for i in 0:100
         # println(base_five)
@@ -303,11 +297,10 @@ function permutate_setpoint(out_dir, n1, n2, Dist_T0, initial_conditions, reconf
         unique_permutations += 1
         SetChange_xB = SetChange_xB .+ step_size
         println("SetChange_xB=",SetChange_xB)
-        # print("SetChange_xB: " * string(SetChange_xB))
         image_name = (out_dir * "\\Perm_SetChange_xB" * string(SetChange_xB[end]) * ".pdf")
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        discrepancies = MPC_tracking(n1,n2,Dist_T0,SetChange_xB,SetChange_T,
-        1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,initial_conditions;tmax=5000, print=false,
+        MPC_tracking(n1,n2,Dist_T0,SetChange_xB,SetChange_T,
+        1,1e7,1e7,1e-5,1e7,90,1000,[8 15],15,[300 388.7 0.11];tmax=5000, print=false,
         save_plots=true, plot_name=image_name)
         n += 1
 
@@ -321,7 +314,7 @@ end
 
 # changes the configuration in the middle of running, permutates only Dist_T0
 # reactors to permutate is the list of reactor numbers to permutate xBs' on
-function permutate_temp_in(out_dir, n1, n2, Dist_T0, initial_conditions, reconfiguration_conditions)#=,
+function permutate_temp_in(out_dir, n1, n2, Dist_T0, SetChange_xB, SetChange_T)#=,
     reactors_to_permutate)=#
     N = size(n1)[1] - 1
     unique_permutations = 0
@@ -330,14 +323,6 @@ function permutate_temp_in(out_dir, n1, n2, Dist_T0, initial_conditions, reconfi
 
     num_permutations = 19
     # num_permutations = 39
-    SetChange_xB=zeros(1,N)
-    SetChange_T=zeros(1,N)
-    
-
-    for i=1:N
-        SetChange_xB[i] = reconfiguration_conditions[i,1] - initial_conditions[i,1]
-        SetChange_T[i] = reconfiguration_conditions[i,2] - initial_conditions[i,2]
-    end
 
     # Disturbance happens on th 15th time point
     step_size = repeat([0 -1], N)
@@ -356,8 +341,8 @@ function permutate_temp_in(out_dir, n1, n2, Dist_T0, initial_conditions, reconfi
         # print("SetChange_xB: " * string(SetChange_xB))
         image_name = (out_dir * "\\Perm_Dist_TO" * string(Dist_T0[1,2]) * ".pdf")
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        discrepancies = MPC_tracking(n1,n2,Dist_T0,SetChange_xB,SetChange_T,
-        1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,initial_conditions;tmax=5000, print=false,
+        MPC_tracking(n1,n2,Dist_T0,SetChange_xB,SetChange_T,
+        1,1e7,1e7,1e-5,1e7,90,1000,[8 15],15,[300 388.7 0.11];tmax=5000, print=false,
         save_plots=true, plot_name=image_name)
         n += 1
 
