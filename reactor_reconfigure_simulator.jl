@@ -1,10 +1,10 @@
 # For any given number of reactors and potential configurations
 # https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
-# include("permutation.jl")
+include("permutation.jl")
 
 function loadProcessData(N::Int,n,initial_values;print=true)
     # global F0=9/3600/N #m^3/s
@@ -28,15 +28,15 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     global xA0=1
     global xB0=0
     # 4R parallel
-    global T0=[300 300 300 300]
-    global Ts=[388.7 388.7 388.7 388.7]
-    global xBs=[0.11 0.11 0.11 0.11]
-    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
+    # global T0=[300 300 300 300]
+    # global Ts=[388.7 388.7 388.7 388.7]
+    # global xBs=[0.11 0.11 0.11 0.11]
+    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3] 1-xBs[4]]
     # 3R parallel
-    # global T0=[300 300 300]
-    # global Ts=[388.7 388.7 388.7]
-    # global xBs=[0.11 0.11 0.11]
-    # global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
+    global T0=[300 300 300]
+    global Ts=[388.7 388.7 388.7]
+    global xBs=[0.11 0.11 0.11]
+    global xAs=[1-xBs[1] 1-xBs[2] 1-xBs[3]]
     # global T0=[300 300]
     # global Ts=[388.7 388.7]
     # global xBs=[0.11 0.11]
@@ -116,9 +116,9 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     T_0=T_0real
     xA_0=xA_0real
     xB_0=xB_0real
-    println("T0_in=",T0_in)
-    println("T0_0=",T_0)
-    println("xB=",xB_0)
+    # println("T0_in=",T0_in)
+    # println("T0_0=",T_0)
+    # println("xB=",xB_0)
 
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
@@ -478,11 +478,24 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     touch(top_file)
     file = open(top_file, "w")
     #TODO column_names and data should be consistent with the number of units
-    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
+    reactorNumbers = [string(i) for i in 1:N]
+    T0_columns = "T0" .* reactorNumbers
+    Tvt_columns = "Tvt" .* reactorNumbers
+    xBvt_columns = "xBvt" .* reactorNumbers
+    flowvt_columns = "flowvt" .* reactorNumbers
+    heatvt_columns = "heatvt" .* reactorNumbers
+    column_names = ["times"; "xBset"; T0_columns; Tvt_columns; xBvt_columns; "xBtvt"; flowvt_columns; heatvt_columns; "Performance index"; "xBt PI";"Tvt PI";"Fvt PI";"Qvt PI";"tt_stable"]
+    # column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
     # write to text file
     write(file, join(column_names, "\t") * "\n")
-    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+
+    T0_data = [T0_invt[i,:] for i in 1:N]
+    Tvt_data = [Tvt[i,:] for i in 1:N]
+    xBvt_data = [xBvt[i,:] for i in 1:N]
+    flowvt_data = [flowvt[N+1,i,:] for i in 1:N]
+    heatvt_data = [heatvt[i,:] for i in 1:N]
+    data=[times; xBsetpoint[end,:]; T0_data ; Tvt_data; xBvt_data; xBtvt; flowvt_data; heatvt_data; b; b1; b2; b3; b4; fill(s[6],length(times))]
+    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
     writedlm(file, data)
     # write to excel file
     XLSX.writetable(top_excel_file, data, column_names)
@@ -621,7 +634,7 @@ end
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Setpoint Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Preparation for reconfiguration\\Results from Github Reconfiguration repository\\Setpoint tracking\\Configuration transfer"
 parallel_3R = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-series_3R = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0] #TODO Yi please check this
+series_3R = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
 parallel_2_and_1_3R = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 mixing_3R = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
 initial_conditions = repeat([300 388.7 0.11],size(parallel_3R)[1] - 1)
