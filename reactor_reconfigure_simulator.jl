@@ -489,12 +489,22 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     # write to text file
     write(file, join(column_names, "\t") * "\n")
 
-    T0_data = [T0_invt[i,:] for i in 1:N]
-    Tvt_data = [Tvt[i,:] for i in 1:N]
-    xBvt_data = [xBvt[i,:] for i in 1:N]
-    flowvt_data = [flowvt[N+1,i,:] for i in 1:N]
-    heatvt_data = [heatvt[i,:] for i in 1:N]
-    data=[times; xBsetpoint[end,:]; T0_data ; Tvt_data; xBvt_data; xBtvt; flowvt_data; heatvt_data; b; b1; b2; b3; b4; fill(s[6],length(times))]
+    # T0_data = [T0_invt[i,:] for i in 1:N]
+    # Tvt_data = [Tvt[i,:] for i in 1:N]
+    # xBvt_data = [xBvt[i,:] for i in 1:N]
+    # flowvt_data = [flowvt[N+1,i,:] for i in 1:N]
+    # heatvt_data = [heatvt[i,:] for i in 1:N]
+    T0_data = T0_invt'
+    Tvt_data = Tvt'
+    xBvt_data = xBvt'
+    flowvt_data = mapreduce(permutedims, vcat, [flowvt[N+1,i,:] for i in 1:N])' # get vector of vectors then convert to matrix and get transpose
+    heatvt_data = heatvt'
+    xBtvt = xBtvt'
+    # data is in matrix form
+    data=[hcat(times, xBsetpoint[end,:]) T0_data Tvt_data xBvt_data xBtvt flowvt_data heatvt_data hcat(b, b1, b2, b3, b4, fill(s[6],length(times)))]
+    # convert data to vector of column data
+    data = [data[:,i] for i in 1:size(data,2)]
+    println(size(data))
     # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
     writedlm(file, data)
     # write to excel file
@@ -649,8 +659,8 @@ disturbances = [0 0; 0 0; 0 0]
 # top_ten = permutate_weights(out_dir, disturbances)
 
 #TODO move files, do 2_and_1 and series
-permutate_setpoint(out_dir, parallel_3R, series_3R, [0 0; 0 0; 0 0], initial_conditions,
-    initial_conditions_3R_mixing, [0 0 1])
+# permutate_setpoint(out_dir, parallel_3R, series_3R, [0 0; 0 0; 0 0], initial_conditions,
+#     initial_conditions_3R_mixing, [0 0 1])
 
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Temp_in permutations\\"
 permutate_temp_in(out_dir, parallel_3R, mixing_3R, [-41.0 -41.0; -41.0 -41.0; -41.0 -41.0], initial_conditions,
