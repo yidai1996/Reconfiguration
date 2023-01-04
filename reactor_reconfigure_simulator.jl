@@ -647,10 +647,14 @@ parallel_3R = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 series_3R = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
 parallel_2_and_1_3R = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 mixing_3R = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
+parallel_4R = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
+non_parallel_4R = [0 0 1 0 0; 0 0 1 0 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 1 0] # just an example, this is 1 and 2 mix into 3 and 4 is in series after 3
 initial_conditions = repeat([300 388.7 0.11],size(parallel_3R)[1] - 1)
 initial_conditions_3R_series = [300 370 0.055;300 380 0.08; 300 388.7 0.11] # 3R series
 initial_conditions_3R_2_and_1 = [300 370 0.055;300 388.7 0.11; 300 388.7 0.11] # 3R 2and1 parallel
 initial_conditions_3R_mixing = [300 370 0.055;300 370 0.055; 300 388.7 0.11] # 3R mixing
+initial_conditions_4R_parallel = repeat([300 388.7 0.11],size(parallel_4R)[1] - 1)
+initial_conditions_4R_non_parallel = repeat([300 388.7 0.11],size(parallel_4R)[1] - 1) # same as above, just an example
 disturbances = [0 0; 0 0; 0 0]
 
 
@@ -663,8 +667,8 @@ disturbances = [0 0; 0 0; 0 0]
 #     initial_conditions_3R_mixing, [0 0 1])
 
 out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Temp_in permutations\\"
-permutate_temp_in(out_dir, parallel_3R, mixing_3R, [-41.0 -41.0; -41.0 -41.0; -41.0 -41.0], initial_conditions,
-    initial_conditions_3R_mixing, [0 0 1])
+permutate_temp_in(out_dir, parallel_4R, non_parallel_4R, [-41.0 -41.0; -41.0 -41.0; -41.0 -41.0; -41.0 -41.0], initial_conditions_4R_parallel,
+    initial_conditions_4R_non_parallel, [0 0 0 1])
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
 # save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)

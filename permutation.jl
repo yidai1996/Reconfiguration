@@ -328,7 +328,7 @@ function permutate_temp_in(out_dir, n1, n2, Dist_T0, initial_conditions, reconfi
 
 
     num_permutations = 81
-    SetChange_xB = [0.15 0.15 0.15] .* reactors_to_permutate
+    SetChange_xB = [0.15 0.15 0.15 0.15] .* reactors_to_permutate # this is hardcoded, had to change for 4R
     step_size = repeat([1.0 1.0], N)
     SetChange_T = [reconfiguration_conditions[i,2] - initial_conditions[i,2] for i in 1:N]
 
