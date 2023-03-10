@@ -335,22 +335,24 @@ end
 # full documentation at https://docs.google.com/document/d/1M9YBCu95bkd8m2DBJw7dbVq65WrtEwY9orqvBqOqalA/edit#
 # initial_conditions is an Nx4 matrix where N is the number of reactors and 4 is [T0, Ts, xBs, setpoint_change].
 # ranges_steps is an 4x3 matrix where each row is [start, end, step_size].
-function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps,
-    reactors_to_permutate)
+function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
     N = size(n1)[1] - 1
     num_variables = size(initial_conditions)[2]
     visited_dictionary = Dict() # [T0, Ts, xBs, setpoint_change] => {0,1} - don't run the same conditions twice
+    # get index of reactor that will be permutated to use for dictionary key
     unique_permutations = 0
     steps = floor.((ranges_steps[:,2] .- ranges_steps[:,1]) ./ ranges_steps[:,3])
-    max_steps = maximum(steps)
+    max_steps = Int64(maximum(steps))
     permutation_values = zeros(Float64, (max_steps, num_variables, N))
     for n in 1:N # for each reactor
         for i in 1:max_steps # for every row 
             for j in 1:num_variables # for each number in [T0, Ts, xBs, setpoint_change]
                 if i <= steps[j]
+                    #TODO fix this to meet start and end
                     permutation_values[i,j,n] = initial_conditions[n,j] + i * ranges_steps[j,3]
                 else
                     permutation_values[i,j,n] = initial_conditions[n,j] # set to original weight if already past max value
+                end
             end
         end
     end
@@ -362,60 +364,46 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps,
     # for i in ProgressBar(10:20)
     for i in ProgressBar(0:num_permutations)
     # for i in 0:100
-        base_max_steps = string(i, base=max_steps, pad=size(original_values)[2])
+        # for bases over 10, string uses a-z for values 10-35 and A-Z for values 36-61
+        base_max_steps = string(i, base=max_steps, pad=size(initial_conditions)[2])
         # println(base_max_steps)
-        current_values = deepcopy(original_values)
+        current_values = deepcopy(initial_conditions)
         for n in 1:N
             for j in 1:4
                 char = base_max_steps[j]
-                #TODO test below
-                if !tryparse(Int64, char)
-                    index = Int64(char) - Int64('a') + 10
+                if tryparse(Int64, string(char)) === nothing # digit is a character
+                    if islowercase(char)
+                        index = Int64(char) - Int64('a') + 10 # if digit is 10-35
+                    else
+                        index = Int64(char) - Int64('A') + 36 # if digit is 36-61
+                    end
+                    # julia is 1-indexed, so we have to add 1
                     current_values[n,j] = permutation_values[index + 1, j, n]
                 else
+                    # julia is 1-indexed, so we have to add 1
                     current_values[n,j] = permutation_values[parse(Int64, char) + 1, j, n]
                 end
-                #TODO test above
             end
         end
-        println("current_values=",current_values)
-
-        #TODO test below
+        
         # check to see if permutation already has been ran, just use first reactor's conditions
-        if visited_dictionary[current_values[1]]
-            continue
+        if haskey(visited_dictionary, current_values[1])
+            # may not be necessary to check, just want to be explicit
+            if visited_dictionary[current_values[1]] == 1
+                continue
+            end
         else
             visited_dictionary[current_values[1]] = 1
+        end
         unique_permutations += 1
-        #TODO test above
-
+        
+        println("current_values=",current_values)
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        discrepancies = MPC_tracking(adjacencies, adjacencies,disturbances,[0 0;0 0;0 0],[0 0;0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,current_values
-        ;tmax=5000, print=false)
+        # discrepancies = MPC_tracking(adjacencies, adjacencies,disturbances,[0 0;0 0;0 0],[0 0;0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,current_values
+        # ;tmax=5000, print=false)
 
     end
     println("$(unique_permutations) unique permutations found!")
-    # for i in 1:num_permutations
-    #     println(completed_permutations[i,:])
-    # end
-    
-
-    top = round.(top,digits=9)
-    display(top)
-    println("writing top configurations to file")
-    top_file = out_dir * "\\top_initial_conditions.txt"
-    top_excel_file = out_dir * "\\top_initial_conditions.xlsx"
-    touch(top_file)
-    file = open(top_file, "w")
-    column_names = ["T0", "Ts", "xBs", "xBtvt", "Tvt", "flowvt", "heatvt", "max_Tvt", "tt_stable", "PI"]
-    # write to text file
-    write(file, join(column_names, "\t") * "\n")
-    writedlm(file, top)
-    # write to excel file
-    XLSX.writetable(top_excel_file, [top[:, i] for i in 1:size(top,2)], column_names, overwrite=true)
-    close(file)
-
-    return top
 end
 
 # format: 1-3,2-3 (mixing configuration)
