@@ -341,26 +341,25 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
     visited_dictionary = Dict() # [T0, Ts, xBs, setpoint_change] => {0,1} - don't run the same conditions twice
     # get index of reactor that will be permutated to use for dictionary key
     unique_permutations = 0
-    steps = floor.((ranges_steps[:,2] .- ranges_steps[:,1]) ./ ranges_steps[:,3])
+    steps = floor.((ranges_steps[:,2] .- ranges_steps[:,1]) ./ ranges_steps[:,3]) .+ 1
     max_steps = Int64(maximum(steps))
+    println(steps, max_steps)
     permutation_values = zeros(Float64, (max_steps, num_variables, N))
     for n in 1:N # for each reactor
         for i in 1:max_steps # for every row 
             for j in 1:num_variables # for each number in [T0, Ts, xBs, setpoint_change]
                 if i <= steps[j]
                     #TODO fix this to meet start and end
-                    permutation_values[i,j,n] = initial_conditions[n,j] + i * ranges_steps[j,3]
+                    permutation_values[i,j,n] = initial_conditions[n,j] + (i - 1) * ranges_steps[j,3]
                 else
                     permutation_values[i,j,n] = initial_conditions[n,j] # set to original weight if already past max value
                 end
             end
         end
     end
-    display(permutation_values)
+    # display(permutation_values)
 # add
-
     num_permutations = max_steps^num_variables - 1 # iterate in base max_steps through all possible permutations
-
     # for i in ProgressBar(10:20)
     for i in ProgressBar(0:num_permutations)
     # for i in 0:100
@@ -387,17 +386,15 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
         end
         
         # check to see if permutation already has been ran, just use first reactor's conditions
-        if haskey(visited_dictionary, current_values[1])
+        if haskey(visited_dictionary, current_values[1,:,1])
             # may not be necessary to check, just want to be explicit
-            if visited_dictionary[current_values[1]] == 1
+            if visited_dictionary[current_values[1,:,1]] == 1
                 continue
             end
         else
-            visited_dictionary[current_values[1]] = 1
+            visited_dictionary[current_values[1,:,1]] = 1
         end
         unique_permutations += 1
-        
-        println("current_values=",current_values)
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
         # discrepancies = MPC_tracking(adjacencies, adjacencies,disturbances,[0 0;0 0;0 0],[0 0;0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,current_values
         # ;tmax=5000, print=false)
