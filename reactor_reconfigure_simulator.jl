@@ -467,24 +467,14 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
 
     
     println("writing performance to file")
-    top_file = out_dir * "\\initial_" * strint().txt"
-    top_excel_file = out_dir * "\\test setpoint+0.14.xlsx"
-
-    # For permutate setpoint
-    # top_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[end]) * ".txt"
-    # top_excel_file = out_dir * "\\SetChange_xB=" * string(SetChange_xB[end]) * ".xlsx"
-
-    # For permutate disturbance
-    # top_file = out_dir * "\\Dist=" * string(Dist_T0[1,2]) * ".txt"
-    # top_excel_file = out_dir * "\\Dist=" * string(Dist_T0[1,2]) * ".xlsx"
-
-    # For permutate initial conditions
-    top_file = out_dir * "\\Perm_initialCondition" * string(initial_values) * ".txt"
-    top_excel_file = out_dir * "\\Perm_initialCondition" * string(initial_values) * ".xlsx"
+    top_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1])* ".txt"
+    # Will add setpoint change once the initial_values has setpoint change information
+    top_excel_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1])* ".xlsx"
+    # Will add setpoint change once the initial_values has setpoint change information
 
     touch(top_file)
     file = open(top_file, "w")
-    #TODO column_names and data should be consistent with the number of units
+
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
     # column_names = ["times","xBset","T01","T02", "T03", "T04","Tvt1","Tvt2","Tvt3","Tvt4", "xBvt1","xBvt2","xBvt3","xBvt4", "xBtvt", "flowvt1", "flowvt2","flowvt3","flowvt4","heatvt1","heatvt2","heatvt3","heatvt4", "ObjValue from MPC", "xBt ISE from MPC","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
     # write to text file
