@@ -344,7 +344,7 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
     steps = floor.((ranges_steps[:,2] .- ranges_steps[:,1]) ./ ranges_steps[:,3]) .+ 1
     max_steps = Int64(maximum(steps))
     println(steps, max_steps)
-    permutation_values = zeros(Float64, (max_steps, num_variables, N))
+    permutation_values = zeros(Float64, (max_steps, num_variables , N))
     for n in 1:N # for each reactor
         for i in 1:max_steps # for every row 
             for j in 1:num_variables # for each number in [T0, Ts, xBs, setpoint_change]
@@ -358,17 +358,22 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
         end
     end
     # display(permutation_values)
-# add
+    # add
     num_permutations = max_steps^num_variables - 1 # iterate in base max_steps through all possible permutations
     # for i in ProgressBar(10:20)
     for i in ProgressBar(0:num_permutations)
     # for i in 0:100
         # for bases over 10, string uses a-z for values 10-35 and A-Z for values 36-61
         base_max_steps = string(i, base=max_steps, pad=size(initial_conditions)[2])
-        # println(base_max_steps)
+        # pad = size(initial_conditions)[2] + 1 if setpoint change is involved
+        println(base_max_steps)
         current_values = deepcopy(initial_conditions)
+        println(current_values)
         for n in 1:N
-            for j in 1:4
+            # println("n=",n)
+            # for j in 1:4
+            for j in 1:3
+                # println("j=",j)
                 char = base_max_steps[j]
                 if tryparse(Int64, string(char)) === nothing # digit is a character
                     if islowercase(char)
@@ -382,6 +387,7 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
                     # julia is 1-indexed, so we have to add 1
                     current_values[n,j] = permutation_values[parse(Int64, char) + 1, j, n]
                 end
+                # print(current_values)
             end
         end
         
@@ -395,9 +401,12 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
             visited_dictionary[current_values[1,:,1]] = 1
         end
         unique_permutations += 1
-        # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        # discrepancies = MPC_tracking(adjacencies, adjacencies,disturbances,[0 0;0 0;0 0],[0 0;0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,current_values
-        # ;tmax=5000, print=false)
+        # print(current_values)
+        disturbances = zeros(N,2)
+        disturbances[:,2] = [0 current_values[1,1]-initial_conditions[1,1]; 0 current_values[2,1]-initial_conditions[2,1]; 0 current_values[3,1]-initial_conditions[3,1]]
+        SetChange_xB = [0 0; 0 0; 0 0] # Setpoint_change hasn't be involved
+        MPC_tracking(n1, n2, disturbances,SetChange_xB,[0 0;0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[4 15],15,current_values
+        ;tmax=5000, print=false)
 
     end
     println("$(unique_permutations) unique permutations found!")
