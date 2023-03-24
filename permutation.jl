@@ -361,7 +361,7 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
         end
     end
     # display(permutation_values)
-# add
+    # add
     num_permutations = max_steps^num_variables - 1 # iterate in base max_steps through all possible permutations
     # for i in ProgressBar(10:20)"
     for i in ProgressBar(0:num_permutations)
