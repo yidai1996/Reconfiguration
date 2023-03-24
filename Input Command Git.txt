@@ -26,3 +26,9 @@ MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1
 3R parallel to mixing
 MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0;0 0;0 0],[-0.055;-0.055;0.01],[-18.7;-18.7;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],15,[300 388.7 0.11];tmax=6000,save_plots=true,plot_name="parallel to mixing +0.01.png")
 
+Example run of permutate_all on 3R 2 and 1 configuration
+out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\permutate_all permutations\\"
+n1 = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+initial_conditions = [300 370 0.055;300 388.7 0.11; 300 388.7 0.11]
+ranges_steps = [280 320 5; 350 400 10; 0.05 0.2 0.01; 0.01 0.10 0.01]
+permutate_all(out_dir, n1, n1, initial_conditions, ranges_steps)
