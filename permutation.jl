@@ -373,17 +373,7 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
         for n in 1:N
             for j in 1:num_variables
                 char = base_max_steps[j]
-                # if tryparse(Int64, string(char)) === nothing # digit is a character
-                #     if islowercase(char)
-                #         index = Int64(char) - Int64('a') + 10 # if digit is 10-35
-                #     else
-                #         index = Int64(char) - Int64('A') + 36 # if digit is 36-61
-                #     end
-                #     # julia is 1-indexed, so we have to add 1
-                #     current_values[n,j] = permutation_values[index + 1, j, n]
-                # else
-                #     # julia is 1-indexed, so we have to add 1
-                # end
+                # julia is 1-indexed, so we have to add 1
                 current_values[n,j] = permutation_values[parse(Int64, char, base=max_steps) + 1, j, n]
             end
         end
@@ -391,7 +381,6 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
         # check to see if permutation already has been ran, just use first reactor's conditions
         if haskey(visited_dictionary, current_values[1,:,1])
             # may not be necessary to check, just want to be explicit
-
             if visited_dictionary[current_values[1,:,1]] == 1
                 continue
             end
