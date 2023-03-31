@@ -389,12 +389,12 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
         end
         unique_permutations += 1
         # println(visited_dictionary)
-        # println(current_values)
-        initial_conditions = current_values[:,1:end-1] # all but the last column
+        println(current_values)
+        
+        initial_conditions_input = current_values[:,1:end-1] # all but the last column
         setpoint_change = current_values[1:end]
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        # discrepancies = MPC_tracking(adjacencies, adjacencies,disturbances,[0 0;0 0;0 0],[0 0;0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15],15,current_values
-        # ;tmax=5000, print=false)
+        MPC_tracking(out_dir, n1, n2 ,[0 0;0 0;0 0],[0;0;setpoint_change[end]-0.11],[0;0;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],0,initial_conditions_input;tmax=400,print=false,save_plots=false,plot_name="all_plots.png")
 
     end
     println("$(unique_permutations) unique permutations found!")

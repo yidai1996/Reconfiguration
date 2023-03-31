@@ -255,7 +255,7 @@ end
 # SetChange_xB = [1xN]
 
 function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
-    dist_time,setpoint_time,initial_values, initial_setpoints;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
+    dist_time,setpoint_time,initial_values; tmax=200,print=true,save_plots=false,plot_name="all_plots.png") # This is for continous disturbance on the (unstable) input temperature
     # (runs the moving horizon loop for set point tracking)
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
@@ -273,7 +273,8 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
             return
         end
     end
-    loadProcessData(N,n1,initial_setpoints,print=print)
+    loadProcessData(N,n1,initial_values,print=print)
+    # loadProcessData(N,n1,initial_setpoints,print=print)
 
     time_steps=round(Int,tmax/dt)
 
@@ -467,26 +468,33 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
 
     
     println("writing performance to file")
-    top_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1])* ".txt"
-    # Will add setpoint change once the initial_values has setpoint change information
-    top_excel_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1])* ".xlsx"
-    # Will add setpoint change once the initial_values has setpoint change information
-
+    # txt file
+    top_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1]) * "SetChange_xB_" * string(SetChange_xB[end]) * ".txt"
     touch(top_file)
     file = open(top_file, "w")
-
+    
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
-    # column_names = ["times","xBset","T01","T02", "T03", "T04","Tvt1","Tvt2","Tvt3","Tvt4", "xBvt1","xBvt2","xBvt3","xBvt4", "xBtvt", "flowvt1", "flowvt2","flowvt3","flowvt4","heatvt1","heatvt2","heatvt3","heatvt4", "ObjValue from MPC", "xBt ISE from MPC","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
-    # write to text file
-    write(file, join(column_names, "\t") * "\n")
-    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
     data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],obj_output_total,obj_output_xBt,obj_output_T,obj_output_F,obj_output_Q,fill(s[6],length(times))]
-    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
-    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],T0_invt[4,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],Tvt[4,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBvt[4,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],flowvt[N+1,4,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],heatvt[4,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+
+    # write to txt file
+    write(file, join(column_names, "\t") * "\n")
     writedlm(file, data)
+    
     # write to excel file
+    top_excel_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1])* "SetChange_xB_" * string(SetChange_xB[end]) * ".xlsx"
+
     XLSX.writetable(top_excel_file, data, column_names)
     close(file)
+
+    # column_names = ["times","xBset","T01","T02", "T03", "T04","Tvt1","Tvt2","Tvt3","Tvt4", "xBvt1","xBvt2","xBvt3","xBvt4", "xBtvt", "flowvt1", "flowvt2","flowvt3","flowvt4","heatvt1","heatvt2","heatvt3","heatvt4", "ObjValue from MPC", "xBt ISE from MPC","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
+
+    # excel file
+    
+    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
+    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],T0_invt[4,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],Tvt[4,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBvt[4,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],flowvt[N+1,4,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],heatvt[4,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+    
+    
 
     return s
 
