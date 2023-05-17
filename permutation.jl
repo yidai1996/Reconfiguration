@@ -3,7 +3,7 @@
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
-# include("more_reactor_reconfigure_combination_xB_compacted_deleteuselesssyntax_v7.jl")
+include("reactor_reconfigure_simulator.jl")
 
 function permutate_weights(out_dir, disturbances)
     original_weights = [1,1e7,1e7,1e-5,1e7]

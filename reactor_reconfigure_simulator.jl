@@ -4,7 +4,7 @@
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
-include("permutation.jl")
+# include("permutation.jl")
 
 function loadProcessData(N::Int,n,initial_values;print=true)
     # global F0=9/3600/N #m^3/s
@@ -73,6 +73,7 @@ function loadProcessData(N::Int,n,initial_values;print=true)
 
     global T0=initial_values[:,1] #K
     global Ts=initial_values[:,2] # will change with different input n and other initial conditions
+    println("Ts=",Ts)
     global xBs=initial_values[:,3] # will change with different input n and other initial conditions
     global xAs=1 .- xBs # will change with different input n and other initial conditions
 
@@ -469,22 +470,22 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     
     println("writing performance to file")
     # txt file
-    top_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1]) * "SetChange_xB_" * string(SetChange_xB[end]) * ".txt"
-    touch(top_file)
-    file = open(top_file, "w")
+    # top_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1]) * "SetChange_xB_" * string(SetChange_xB[end]) * ".txt"
+    # touch(top_file)
+    # file = open(top_file, "w")
     
     column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
     data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],obj_output_total,obj_output_xBt,obj_output_T,obj_output_F,obj_output_Q,fill(s[6],length(times))]
 
     # write to txt file
-    write(file, join(column_names, "\t") * "\n")
-    writedlm(file, data)
+    # write(file, join(column_names, "\t") * "\n")
+    # writedlm(file, data)
     
     # write to excel file
-    top_excel_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_" *string(initial_values[1,1])* "SetChange_xB_" * string(SetChange_xB[end]) * ".xlsx"
+    top_excel_file = out_dir * "\\initial_T1_" * string(initial_values[1,2]) *"_T2_" * string(initial_values[2,2]) * "_T3_" * string(initial_values[3,2]) * "_xB1_" *string(initial_values[1,3]) * "_xB2_" *string(initial_values[2,3]) * "_xB3_" *string(initial_values[3,3]) * "_T0_3_" *string(initial_values[1,1]+Dist_T0[3,1])* "SetChange_xB_" * string(SetChange_xB[end]) * ".xlsx"
 
     XLSX.writetable(top_excel_file, data, column_names)
-    close(file)
+    # close(file)
 
     # column_names = ["times","xBset","T01","T02", "T03", "T04","Tvt1","Tvt2","Tvt3","Tvt4", "xBvt1","xBvt2","xBvt3","xBvt4", "xBtvt", "flowvt1", "flowvt2","flowvt3","flowvt4","heatvt1","heatvt2","heatvt3","heatvt4", "ObjValue from MPC", "xBt ISE from MPC","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
 
@@ -553,6 +554,7 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
     # assume there is no spliting
     # TODO negative flowrate occurs for the mixing reactor with n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 1 0]
     # TODO BoundErrors occur if n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 0 0]
+    println(T_0)
     Lookup=findall(isone,n) # find all index of open streams
     L=length(Lookup)
     if print
