@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 using CSV, DataFrames,XLSX
 
 df1 = DataFrame(Tin=300, xBset=0.11, T1initial=388.7, T2initial=388.7, T3initial=388.7, xB1initial=0.11, xB2initial=0.11, xB3initial=0.11, xBtinitial=0.11, parallel=0.0)
@@ -184,3 +183,5 @@ CSV.write("G:\\My Drive\\Research\\SVM\\Training dataset\\Training set of series
 #     end
 # end
 # i=0;
+
+

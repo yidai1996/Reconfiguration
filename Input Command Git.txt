@@ -54,5 +54,10 @@ permutate_all("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration", [
 permutate_all("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration", [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [300 388.7 0.11;300 388.7 0.11; 300 388.7 0.11], [280 320 5; 350 400 10; 0.05 0.2 0.01; 0.01 0.10 0.01])
 
 05/16
-MPC_tracking("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration\\additional_data", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0 0;0 0;0 0],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],10,[300 388.7 0.11; 300 388.7 0.11;300 388.7 0.11];tmax=1500,print=true,save_plots=true,plot_name="all_plots.pdf")
-MPC_tracking("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration\\additional_data", [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0 0;0 0;0 0],[0;0;0.05],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 370 0.055; 300 388.7 0.11;300 388.7 0.11];tmax=1500,print=true,save_plots=true,plot_name="all_plots.pdf")
+MPC_tracking("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration\\additional_data", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[10 10;10 10;10 10],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 388.7 0.11; 300 388.7 0.11;300 388.7 0.11];tmax=1500,print=true,save_plots=true,plot_name="all_plots.pdf")
+
+MPC_tracking("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration\\additional_data", [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0 0;0 0;0 0],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 370 0.055; 300 388.7 0.11;300 388.7 0.11];tmax=1500,print=true,save_plots=true,plot_name="all_plots.pdf")
+
+MPC_tracking("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration\\additional_data", [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0],[0 0;0 0;0 0],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 370 0.055; 300 370 0.055; 300 388.7 0.11];tmax=1500,print=true,save_plots=true,plot_name="all_plots.pdf")
+
+MPC_tracking("C:\\Users\\yid\\TemporaryResearchDataStorage\\Reconfiguration\\additional_data", [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0],[0 0;0 0;0 0],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 370 0.055; 300 380 0.08; 300 388.7 0.11];tmax=1500,print=true,save_plots=true,plot_name="all_plots.pdf")
