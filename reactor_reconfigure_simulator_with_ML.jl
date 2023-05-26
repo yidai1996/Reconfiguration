@@ -323,6 +323,19 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     tt=1
 
     for tt=1:time_steps
+         # Inplement reconfiguration based on ML mathematical guideline.
+         features = [xBsetpoint[tt], Tvt[1,tt], Tvt[2,tt], Tvt[3,tt], xBvt[1,tt], xBvt[2,tt], xBvt[3,tt], xBtvt[tt]]
+         mach = machine("KNN_Zavreal_best.jl")
+         configuration = MLJ.predict(mach, features)
+         if configuration == "parallel"
+             adjacentM[:,:,tt] = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+         elseif configuration == "hybrid"
+             adjacentM[:,:,tt] = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
+         elseif configuration == "mixing"
+             adjacentM[:,:,tt] = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
+         else adjacentM[:,:,tt] = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
+         end
+ 
         resultsheatvt,resultsflowvt,obj_output_xBt[tt+1],obj_output_T[tt+1],obj_output_Q[tt+1],obj_output_F[tt+1],obj_output_total[tt+1]=MPC_solve(xBsetpoint[:,tt],Tsetpoint[:,tt],adjacentM[:,:,tt],flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
             heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
 
@@ -399,19 +412,7 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
             end
         end
 
-        # Inplement reconfiguration based on ML mathematical guideline.
-        features = [xBsetpoint[tt+1], Tvt[1,tt+1], Tvt[2,tt+1], Tvt[3,tt+1], xBvt[1,tt+1], xBvt[2,tt+1], xBvt[3,tt+1], xBtvt[tt+1]]
-        mach = machine("KNN_Zavreal_best.jl")
-        configuration = MLJ.predict(mach, features)
-        if configuration == "parallel"
-            adjacentM[:,:,tt+1] = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-        elseif configuration == "hybrid"
-            adjacentM[:,:,tt+1] = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-        elseif configuration == "mixing"
-            adjacentM[:,:,tt+1] = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
-        else adjacentM[:,:,tt+1] = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
-        end
-
+       
         println("For ",tt+1," iteration, the xBsetpoint is:", xBsetpoint[tt+1])
         xBtvt[tt+1]=sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1] for i=1:N)
         times[tt+1]=times[tt]+dt
