@@ -3,7 +3,8 @@
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
-include("reactor_reconfigure_simulator.jl")
+# include("reactor_reconfigure_simulator.jl")
+include("reactor_reconfigure_simulator_with_ML.jl")
 
 function permutate_weights(out_dir, disturbances)
     original_weights = [1,1e7,1e7,1e-5,1e7]
@@ -394,7 +395,8 @@ function permutate_all(out_dir, n1, n2, initial_conditions, ranges_steps)
         initial_conditions_input = current_values[:,1:end-1] # all but the last column
         setpoint_change = current_values[1:end]
         # discrepancies is an array of length 4 [qXb*dxB^2, qT*dT^2, r_flow*dFlow^2, r_heat*dHeat^2]
-        MPC_tracking(out_dir, n1, n2 ,[0 0;0 0;0 0],[0;0;setpoint_change[end]-0.11],[0;0;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],0,initial_conditions_input;tmax=400,print=false,save_plots=false,plot_name="all_plots.png")
+        # MPC_tracking(out_dir, n1, n2 ,[0 0;0 0;0 0],[0;0;setpoint_change[end]-0.11],[0;0;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],0,initial_conditions_input;tmax=400,print=false,save_plots=false,plot_name="all_plots.png")
+        MPC_tracking(out_dir, n1, n2 ,[0 0;0 0;0 0],[0;0;setpoint_change[end]-0.11],[0;0;0],1,1e7,1e7,1e-5,1e7,90,1000,[8,15],0,initial_conditions_input;tmax=3000,print=false,save_plots=false,plot_name="all_plots.png",MLcheck=false)
 
     end
     println("$(unique_permutations) unique permutations found!")
