@@ -1,16 +1,16 @@
 # For any given number of reactors and potential configurations
-# https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
-
+# https://aiche.onlinelibrary.wiley.com/doi/full/10.1002/aic.11801
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX, CSV
 using DataFrames
 using MLJ
-KNNClassifier = @load KNNClassifier pkg=NearestNeighborModels
+# KNNClassifier = @load KNNClassifier pkg=NearestNeighborModels
 
 # include("permutation.jl")
 
 function loadProcessData(N::Int,n,initial_values;print=true)
     # global F0=9/3600/N #m^3/s
+    # global Vlittle=0.5
     global Vlittle=0.5/3
     # Parallel
     global V=fill(Vlittle, N) #m^3
@@ -85,13 +85,21 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     global Q_nom=zeros(N)
     global F_nom
     Q_nom,F_nom,ini_lookup=findSS_all(T0,Ts,xBs,n,print=print)
-    for k=1:length(ini_lookup)
-        for i=1:N+1
-            for j=1:N+1
-                if ini_lookup[k][1]==i&&ini_lookup[k][2]==j
-                    Flow0[i,j]=F_nom[k]
-                end
-            end
+    # for k=1:length(ini_lookup)
+    #     for i=1:N+1
+    #         for j=1:N+1
+    #             if ini_lookup[k][1]==i&&ini_lookup[k][2]==j
+    #                 Flow0[i,j]=F_nom[k]
+    #             end
+    #         end
+    #     end
+    # end
+    for k in eachindex(ini_lookup)
+        checkedflow = F_nom[k]
+        if checkedflow < 0
+            checkedflow = 1e-7
+        else 
+            Flow0[ini_lookup[k]]=F_nom[k]
         end
     end
 
@@ -100,7 +108,173 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     end
 end
 
-function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
+# function MPC_solve(m_start,xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
+#     # println("n=",n)
+#     global count
+
+#     K=round(Int,P/dt)
+
+#     MPC=JuMP.Model(Ipopt.Optimizer)
+#     # MPC=Model(() -> BARON.Optimizer(MaxTime=10000))
+#     MOI.set(MPC, MOI.RawOptimizerAttribute("print_level"), 1)
+
+#     T0_in=T0_inreal
+#     T_0=T_0real
+#     xA_0=xA_0real
+#     xB_0=xB_0real
+#     # println("T0_in=",T0_in)
+#     # println("T0_0=",T_0)
+#     # println("xB=",xB_0)
+
+#     # Only steady states for input streams from outside instead of other reactors
+#     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
+#     # println(Tset,xBset)
+#     heat_ss,flow_ss,mpclook=findSS_all(T0_in,Tset,xBset,m_start,print=print)
+
+#     if print
+#         println("Heat_ss=",heat_ss)
+#         println("Flow_ss=",flow_ss)
+#         println(mpclook)
+#     end
+
+#     for k in eachindex(mpclook)
+#         checkedflow = flow_ss[k]
+#         if checkedflow < 0
+#             checkedflow = 1e-7
+#         else 
+#             Flow[mpclook[k]]=flow_ss[k]
+#         end
+#     end
+#     for i=1:N
+#         if heat_ss[i]<0
+#             heat_ss[i]=1e-7
+#         end
+#     end
+#     println("Heat_ss=",heat_ss)
+#     println("Flow_ss=",flow_ss)
+#     if print
+#         println("Flow=",Flow)
+#     end
+#     if length(findall(x->x<0,Flow))!=0
+#         println("Found Negative Flow!")
+#         return
+#     end
+
+#     xA_guess=zeros(N,K+1)
+#     xB_guess=zeros(N,K+1)
+#     T_guess=zeros(N,K+1)
+#     for i=1:N
+#         xA_guess[i,1]=xA_0[i]
+#         xB_guess[i,1]=xB_0[i]
+#         T_guess[i,1]=T_0[i]
+#     end
+#     xB_tot_guess=zeros(K+1)
+#     xB_tot_guess[1]=sum(m_start[i,N+1]*Flow[i,N+1]*xB_guess[i,1] for i=1:N)/sum(m_start[i,N+1]*Flow[i,N+1] for i=1:N)
+
+#     for k=1:K
+#         for i=1:N
+#             T_guess[i,k+1] = (1/V[i]*(sum(m_start[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N) + m_start[N+1,i]*Flow[N+1,i]*T0_in[i]- sum(m_start[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V[i])*dt + T_guess[i,k]
+#             xA_guess[i,k+1] = (1/V[i]*(sum(m_start[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N) + m_start[N+1,i]*Flow[N+1,i]*xA0 - sum(m_start[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
+#             xB_guess[i,k+1] = (1/V[i]*(sum(m_start[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(m_start[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
+#         end
+#         xB_tot_guess[k+1] = sum(m_start[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(m_start[i,N+1]*Flow[i,N+1] for i=1:N)
+#         # Tt_guess[k+1]=sum((n[i,N+1])*Flow[i,N+1]*T_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+#     end
+
+#     if print
+#         println("xB_guess=",xB_guess)
+#         println("xBt_guess=",xB_tot_guess)
+#     end
+
+#     JuMP.@variables MPC begin
+#         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
+#         Q[i=1:N,k=0:K-1], (lower_bound=0, upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
+#         # F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=n[i,j]*1.8*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
+#         F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=(m_start[i,j]+1)*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
+#         # F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
+#         m[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=0, upper_bound=1, start=m_start[i,j]) # fraction of flow rate
+#         T[i=1:N,k=0:K], (lower_bound=T0[i],upper_bound=2000,start=T_guess[i,k+1])
+#         xA[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xA_guess[i,k+1])
+#         xB[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xB_guess[i,k+1])
+#         xBt[k=0:K], (lower_bound=0, upper_bound=1,start=xB_tot_guess[k+1])
+        
+
+#         # m[k=0:K], (lower_bound=0, upper_bound=1,start=m_init)
+#     end
+
+#     JuMP.@constraints MPC begin
+#         T_init[i=1:N], T[i,0]==T_0[i]
+#         xA_init[i=1:N], xA[i,0]==xA_0[i]
+#         xB_init[i=1:N], xB[i,0]==xB_0[i]
+#         xBt_init, xBt[0]==sum(m_start[i,N+1]*Flow[i,N+1]*xB_0[i] for i=1:N)/sum(m_start[i,N+1]*Flow[i,N+1] for i=1:N)
+#         InputStream[j=1:N,k=1:K-1], m[N+1,j,k]==1
+#         ZeroConstraint[k=1:K-1], m[N+1,N+1,k]==0
+#         MassBalanceOfFlowFraction[j=1:N,k=0:K-1], sum(m[i,j,k] for i=1:N)==1
+#     end
+
+#     JuMP.@NLconstraints MPC begin
+#         Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V[i]*(sum(m[j,i,k]*F[j,i,k]*T[j,k] for j=1:N) + m[N+1,i,k]*F[N+1,i,k]*T0_in[i]- sum(m[i,j,k]*F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V[i])*dt + T[i,k]
+#         MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V[i]*(sum(m[j,i,k]*F[j,i,k]*xA[j,k] for j=1:N) + m[N+1,i,k]*F[N+1,i,k]*xA0 - sum(m[i,j,k]*F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
+#         MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(m[j,i,k]*F[j,i,k]*xB[j,k] for j=1:N) - sum(m[i,j,k]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
+#         OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(m[i,N+1,k]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(m[i,N+1,k]*F[i,N+1,k] for i=1:N)
+#         MassB[i=1:N,k=0:K-1], sum(m[j,i,k]*F[j,i,k] for j=1:N+1)==sum(m[i,j,k]*F[i,j,k] for j=1:N+1)
+#     end
+
+#     # JuMP.@NLobjective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(m[i,j,k]*F[i,j,k]-m[i,j,k-1]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(m[i,j,0]*F[i,j,0]-m[i,j,K-1]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+#     JuMP.@objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(F[i,j,k]-F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(q_xB*(m[i,j,k]-m[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(F[i,j,0]-F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1) +sum(q_xB*(m[i,j,0]-m[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+
+#     JuMP.optimize!(MPC)
+
+
+#     st=MathOptInterface.RawStatusString()
+#     if st=="INFEASIBLE_POINT"
+#         println(xA1_guess,xA2_guess)
+#         error("Solver infeasible, problem stopping")
+#     end
+#     # obj=getobjectivevalue(MPC) # works for Julia 1.15.3
+#     obj=JuMP.objective_value(MPC) # works for Julia 1.17.2
+#     if print
+#         println("Obj in MPC=",obj)
+#     end
+
+#     results_T=JuMP.value.(T)
+#     # println("results_T=",results_T)
+#     results_xB=JuMP.value.(xB)
+#     # println("results_xB=",results_xB)
+#     results_xBt=JuMP.value.(xBt)
+#     # println("results_xBt=",results_xBt)
+#     results_heat = JuMP.value.(Q)
+#     # println("results_heat=",results_heat)
+#     results_flow = JuMP.value.(F)
+#     # println("results_flow=",results_flow)
+#     results_heat0 = JuMP.value.(Q[:,0])
+#     results_flow0 = JuMP.value.(F[:,:,0])
+#     results_m = JuMP.value.(m)
+#     results_m0 = JuMP.value.(m[:,:,0])
+#     # println("m from MPC=",results_m0)
+#     # println("Type of m is: ", typeof(results_m0))
+#     # println("Type of flow is: ", typeof(results_flow0))
+
+#     obj_T=sum(q_T*(results_T[i,k]-Tset[i])^2 for i=1:N for k=0:K)
+#     obj_xBt=sum(q_xB*(results_xBt[k]-xBset[end])^2 for k=0:K)
+#     obj_Q=sum(r_heat*(results_heat[i,k]-results_heat[i,k-1])^2 for i=1:N for k=1:K-1)+sum(r_heat*(results_heat[i,0]-results_heat[i,K-1])^2 for i=1:N)
+#     obj_F=sum(r_flow*(results_m[i,j,k]*results_flow[i,j,k]-results_m[i,j,k-1]*results_flow[i,j,k-1])^2 for i=1:N for j=1:N+1 for k=1:K-1)+sum(r_flow*(results_m[i,j,0]*results_flow[i,j,0]-results_m[i,j,K-1]*results_flow[i,j,K-1])^2 for i=1:N for j=1:N+1)
+
+#     # println("results_heat=",results_heat)
+#     # println("results_flow=",results_flow)
+#     # println("Obj_T= ",obj_T)
+#     # println("Obj_xBt= ",obj_xBt)
+#     # println("Obj_Q= ",obj_Q)
+#     # println("Obj_F= ",obj_F)
+
+#     if print
+#         println("soln_heat=",results_heat0)
+#         println("soln_flow=",results_flow0)
+#     end
+#     return results_heat0, results_m0, results_flow0, obj_xBt,obj_T,obj_Q,obj_F,obj
+
+# end
+function MPC_solve(m_start,xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
     # println("n=",n)
     global count
 
@@ -114,15 +288,16 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     T_0=T_0real
     xA_0=xA_0real
     xB_0=xB_0real
-    # println("T0_in=",T0_in)
-    # println("T0_0=",T_0)
-    # println("xB=",xB_0)
+    if print
+    println("T0_in=",T0_in)
+    println("T0_0=",T_0)
+    println("xB=",xB_0)
+    end
 
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
     # println(Tset,xBset)
     heat_ss,flow_ss,mpclook=findSS_all(T0_in,Tset,xBset,n,print=print)
-
 
     if print
         println("Heat_ss=",heat_ss)
@@ -130,16 +305,12 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         println(mpclook)
     end
 
-    for k=1:length(mpclook)
-        for i=1:N+1
-            for j=1:N+1
-                if mpclook[k][1]==i&&mpclook[k][2]==j
-                    if flow_ss[k]<0
-                        Flow[i,j]=1e-7
-                    else  Flow[i,j]=flow_ss[k]
-                    end
-                end
-            end
+    for k in eachindex(mpclook)
+        checkedflow = flow_ss[k]
+        if checkedflow < 0
+            checkedflow = 1e-7
+        else 
+            Flow[mpclook[k]]=flow_ss[k]
         end
     end
     for i=1:N
@@ -151,6 +322,15 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     if print
         println("Flow=",Flow)
     end
+    if length(findall(x->x<0,Flow))!=0
+        println("Found Negative Flow!")
+        for i in eachindex(Flow)
+            if Flow[i]<0
+                Flow[i]=1e-7
+            end
+        end
+        # return
+    end
 
     xA_guess=zeros(N,K+1)
     xB_guess=zeros(N,K+1)
@@ -161,34 +341,34 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         T_guess[i,1]=T_0[i]
     end
     xB_tot_guess=zeros(K+1)
-    xB_tot_guess[1]=sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,1] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+    xB_tot_guess[1]=sum(Flow[i,N+1]*xB_guess[i,1] for i=1:N)/sum(Flow[i,N+1] for i=1:N)
 
     for k=1:K
         for i=1:N
-            T_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i]- sum(n[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V[i])*dt + T_guess[i,k]
-            xA_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
-            xB_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
+            T_guess[i,k+1] = (1/V[i]*(sum(Flow[j,i]*T_guess[j,k] for j=1:N) + Flow[N+1,i]*T0_in[i]- sum(Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V[i])*dt + T_guess[i,k]
+            xA_guess[i,k+1] = (1/V[i]*(sum(Flow[j,i]*xA_guess[j,k] for j=1:N) + Flow[N+1,i]*xA0 - sum(Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
+            xB_guess[i,k+1] = (1/V[i]*(sum(Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
         end
-        xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+        xB_tot_guess[k+1] = sum(Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(Flow[i,N+1] for i=1:N)
         # Tt_guess[k+1]=sum((n[i,N+1])*Flow[i,N+1]*T_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
 
-    if print
+    # if print
         println("xB_guess=",xB_guess)
         println("xBt_guess=",xB_tot_guess)
-    end
+    # end
 
     JuMP.@variables MPC begin
         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
         Q[i=1:N,k=0:K-1], (lower_bound=0, upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
         # F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=n[i,j]*1.8*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
-        F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=n[i,j]*(1+Flow[i,j]),start=Flow[i,j])# Flowrate between reactors
+        F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j], upper_bound=1.8*(Flow[i,j]+1),start=Flow[i,j])# Flowrate between reactors
         # F[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=n[i,j]*0.2*Flow[i,j],start=Flow[i,j])# Flowrate between reactors
-        m[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=0, upper_bound=1, start=0) # fraction of flow rate
-        T[i=1:N,k=0:K], (lower_bound=T0[i],upper_bound=2000,start=T_guess[i,k+1])
-        xA[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xA_guess[i,k+1])
-        xB[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xB_guess[i,k+1])
-        xBt[k=0:K], (lower_bound=0, upper_bound=1,start=xB_tot_guess[k+1])
+        # m[i=1:N+1,j=1:N+1,k=0:K-1], (lower_bound=0, upper_bound=1, start=m_start[i,j]) # fraction of flow rate
+        T[i=1:N,k=0:K], (lower_bound=T0[i],upper_bound=2000,start=T_guess[i,1])
+        xA[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xA_guess[i,1])
+        xB[i=1:N,k=0:K], (lower_bound=0, upper_bound=1,start=xB_guess[i,1])
+        xBt[k=0:K], (lower_bound=0, upper_bound=1,start=xB_tot_guess[1])
         
 
         # m[k=0:K], (lower_bound=0, upper_bound=1,start=m_init)
@@ -198,21 +378,20 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         T_init[i=1:N], T[i,0]==T_0[i]
         xA_init[i=1:N], xA[i,0]==xA_0[i]
         xB_init[i=1:N], xB[i,0]==xB_0[i]
-        xBt_init, xBt[0]==sum(n[i,N+1]*Flow[i,N+1]*xB_0[i] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
-        MassB[i=1:N,k=0:K-1], sum(m[j,i,k]*F[j,i,k] for j=1:N+1)==sum(m[i,j,k]*F[i,j,k] for j=1:N+1)
-        InputStream[j=1:N], m[N+1,j,k]==1
-        ZeroConstraint, m[N+1,N+1]==0
-        MassBalanceOfFlowFraction[i=1:N,k=0:K-1], sum(m[i,j,k] for i=1:N)==1
+        xBt_init, xBt[0]==sum(Flow[i,N+1]*xB_0[i] for i=1:N)/sum(Flow[i,N+1] for i=1:N)
+        ZeroConstraint[i=1:N+1,k=1:K-1], F[i,i,k]==0
     end
 
     JuMP.@NLconstraints MPC begin
-        Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V[i]*(sum(m[j,i,k]*F[j,i,k]*T[j,k] for j=1:N) + m[N+1,i,k]*F[N+1,i,k]*T0_in[i]- sum(m[i,j,k]*F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V[i])*dt + T[i,k]
-        MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V[i]*(sum(m[j,i,k]*F[j,i,k]*xA[j,k] for j=1:N) + m[N+1,i,k]*F[N+1,i,k]*xA0 - sum(m[i,j,k]*F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
-        MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(m[j,i,k]*F[j,i,k]*xB[j,k] for j=1:N) - sum(m[i,j,k]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
-        OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(m[i,N+1,k]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(m[i,N+1,k]*F[i,N+1,k] for i=1:N)
+        Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V[i]*(sum(F[j,i,k]*T[j,k] for j=1:N) + F[N+1,i,k]*T0_in[i]- sum(F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V[i])*dt + T[i,k]
+        MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V[i]*(sum(F[j,i,k]*xA[j,k] for j=1:N) + F[N+1,i,k]*xA0 - sum(F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
+        MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(F[j,i,k]*xB[j,k] for j=1:N) - sum(F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
+        OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(F[i,N+1,k] for i=1:N)
+        MassB[i=1:N,k=0:K-1], sum(F[j,i,k] for j=1:N+1)==sum(F[i,j,k] for j=1:N+1)
     end
 
-    JuMP.@objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(m[i,j,k]*F[i,j,k]-m[i,j,k-1]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(m[i,j,0]*F[i,j,0]-m[i,j,K-1]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    # JuMP.@NLobjective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(m[i,j,k]*F[i,j,k]-m[i,j,k-1]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(m[i,j,0]*F[i,j,0]-m[i,j,K-1]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    JuMP.@objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(F[i,j,k]-F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(F[i,j,0]-F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
 
     JuMP.optimize!(MPC)
 
@@ -240,11 +419,13 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     # println("results_flow=",results_flow)
     results_heat0 = JuMP.value.(Q[:,0])
     results_flow0 = JuMP.value.(F[:,:,0])
+    # results_m = JuMP.value.(m)
+    # results_m0 = JuMP.value.(m[:,:,0])
 
     obj_T=sum(q_T*(results_T[i,k]-Tset[i])^2 for i=1:N for k=0:K)
     obj_xBt=sum(q_xB*(results_xBt[k]-xBset[end])^2 for k=0:K)
     obj_Q=sum(r_heat*(results_heat[i,k]-results_heat[i,k-1])^2 for i=1:N for k=1:K-1)+sum(r_heat*(results_heat[i,0]-results_heat[i,K-1])^2 for i=1:N)
-    obj_F=sum(r_flow*(n[i,j]*results_flow[i,j,k]-n[i,j]*results_flow[i,j,k-1])^2 for i=1:N for j=1:N+1 for k=1:K-1)+sum(r_flow*(n[i,j]*results_flow[i,j,0]-n[i,j]*results_flow[i,j,K-1])^2 for i=1:N for j=1:N+1)
+    obj_F=sum(r_flow*(results_flow[i,j,k]-results_flow[i,j,k-1])^2 for i=1:N for j=1:N+1 for k=1:K-1)+sum(r_flow*(results_flow[i,j,0]-results_flow[i,j,K-1])^2 for i=1:N for j=1:N+1)
 
     # println("results_heat=",results_heat)
     # println("results_flow=",results_flow)
@@ -260,7 +441,6 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     return results_heat0, results_flow0, obj_xBt,obj_T,obj_Q,obj_F,obj
 
 end
-
 # SetChange_xB = [1xN]
 
 function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
@@ -320,6 +500,7 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     nn2 = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0];
     nn3 = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0];
     nn4 = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0];
+    adjacentM[:,:,1] = n1
     xBsetpoint[:,1]=xBs
     Tsetpoint[:,1]=Ts
     T0_invt[:,1]=initial_values[:,1]
@@ -329,30 +510,30 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     heatvt[:,1]=Q_nom
     flowvt[1:N+1,1:N+1,1]=Flow0
     xBtvt[1]=sum(n1[i,N+1]*flowvt[i,N+1,1]*xBvt[i,1] for i=1:N)/sum(n1[i,N+1]*flowvt[i,N+1,1] for i=1:N)
-    mach = machine("KNN_Zavreal_best.jl")
-    if MLcheck==true
-        # Inplement reconfiguration based on ML mathematical guideline.
-        features = DataFrame(Tin=T0_invt[1,1], xBset=xBsetpoint[1], T1initial=Tvt[1,1], T2initial=Tvt[2,1], T3initial=Tvt[3,1], xB1initial=xBvt[1,1], xB2initial=xBvt[2,1], xB3initial=xBvt[3,1], xBtinitial=xBtvt[1])
+    # mach = machine("KNN_Zavreal_best.jl")
+#     if MLcheck==true
+#         # Inplement reconfiguration based on ML mathematical guideline.
+#         features = DataFrame(Tin=T0_invt[1,1], xBset=xBsetpoint[1], T1initial=Tvt[1,1], T2initial=Tvt[2,1], T3initial=Tvt[3,1], xB1initial=xBvt[1,1], xB2initial=xBvt[2,1], xB3initial=xBvt[3,1], xBtinitial=xBtvt[1])
        
-        configuration = predict_mode(mach, features)
-       if configuration == ["parallel"]
-           adjacentM[:,:,1]=nn1
-            record_configuration[1]=1
-       elseif configuration == ["hybrid"]
-           adjacentM[:,:,1]=nn2
-           record_configuration[1]=2
-       elseif configuration == ["mixing"]
-           adjacentM[:,:,1]=nn3
-           record_configuration[1]=3
-       elseif configuration == ["series"]
-           adjacentM[:,:,1]=nn4
-           record_configuration[1]=4
-       else pringln("ERROR IN RECONFIGURATION MACHINE")
-       end
-    else
-        adjacentM[1:N+1,1:N+1,1]=n1
-        record_configuration[1]=1
-   end
+#         configuration = predict_mode(mach, features)
+#        if configuration == ["parallel"]
+#            adjacentM[:,:,1]=nn1
+#             record_configuration[1]=1
+#        elseif configuration == ["hybrid"]
+#            adjacentM[:,:,1]=nn2
+#            record_configuration[1]=2
+#        elseif configuration == ["mixing"]
+#            adjacentM[:,:,1]=nn3
+#            record_configuration[1]=3
+#        elseif configuration == ["series"]
+#            adjacentM[:,:,1]=nn4
+#            record_configuration[1]=4
+#        else pringln("ERROR IN RECONFIGURATION MACHINE")
+#        end
+#     else
+#         adjacentM[1:N+1,1:N+1,1]=n1
+#         record_configuration[1]=1
+#    end
     
     
     times[1]=0
@@ -360,36 +541,39 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     
 
     for tt=1:time_steps
-        if MLcheck==true
-             # Inplement reconfiguration based on ML mathematical guideline.
-             features = DataFrame(Tin=T0_invt[1,tt], xBset=xBsetpoint[tt], T1initial=Tvt[1,tt], T2initial=Tvt[2,tt], T3initial=Tvt[3,tt], xB1initial=xBvt[1,tt], xB2initial=xBvt[2,tt], xB3initial=xBvt[3,tt], xBtinitial=xBtvt[tt])
+        # if MLcheck==true
+        #      # Inplement reconfiguration based on ML mathematical guideline.
+        #      features = DataFrame(Tin=T0_invt[1,tt], xBset=xBsetpoint[tt], T1initial=Tvt[1,tt], T2initial=Tvt[2,tt], T3initial=Tvt[3,tt], xB1initial=xBvt[1,tt], xB2initial=xBvt[2,tt], xB3initial=xBvt[3,tt], xBtinitial=xBtvt[tt])
          
         
-             configuration = predict_mode(mach, features)
-            if configuration == ["parallel"]
-                adjacentM[:,:,tt+1]=nn1
-                 record_configuration[tt+1]=1
-            elseif configuration == ["hybrid"]
-                adjacentM[:,:,tt+1]=nn2
-                record_configuration[tt+1]=2
-            elseif configuration == ["mixing"]
-                adjacentM[:,:,tt+1]=nn3
-                 record_configuration[tt+1]=3
-            elseif configuration == ["series"]
-                adjacentM[:,:,tt+1]=nn4
-                record_configuration[tt+1]=4
-            else pringln("ERROR IN RECONFIGURATION MACHINE")
-                break
-            end
-        end
+        #      configuration = predict_mode(mach, features)
+        #     if configuration == ["parallel"]
+        #         adjacentM[:,:,tt+1]=nn1
+        #          record_configuration[tt+1]=1
+        #     elseif configuration == ["hybrid"]
+        #         adjacentM[:,:,tt+1]=nn2
+        #         record_configuration[tt+1]=2
+        #     elseif configuration == ["mixing"]
+        #         adjacentM[:,:,tt+1]=nn3
+        #          record_configuration[tt+1]=3
+        #     elseif configuration == ["series"]
+        #         adjacentM[:,:,tt+1]=nn4
+        #         record_configuration[tt+1]=4
+        #     else pringln("ERROR IN RECONFIGURATION MACHINE")
+        #         break
+        #     end
+        # end
  
-        resultsheatvt,resultsflowvt,obj_output_xBt[tt+1],obj_output_T[tt+1],obj_output_Q[tt+1],obj_output_F[tt+1],obj_output_total[tt+1]=MPC_solve(xBsetpoint[:,tt],Tsetpoint[:,tt],adjacentM[:,:,tt],flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
+        # resultsheatvt, resultsM, resultsflowvt,obj_output_xBt[tt+1],obj_output_T[tt+1],obj_output_Q[tt+1],obj_output_F[tt+1],obj_output_total[tt+1]=MPC_solve(adjacentM[:,:,tt],xBsetpoint[:,tt],Tsetpoint[:,tt],adjacentM[:,:,tt],flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
+        #     heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
+        resultsheatvt, resultsflowvt,obj_output_xBt[tt+1],obj_output_T[tt+1],obj_output_Q[tt+1],obj_output_F[tt+1],obj_output_total[tt+1]=MPC_solve(adjacentM[:,:,tt],xBsetpoint[:,tt],Tsetpoint[:,tt],adjacentM[:,:,tt],flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
             heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
 
         for i=1:N
             heatvt[i,tt+1]=resultsheatvt[i]
-            flowvt[:,:,tt+1]=resultsflowvt
         end
+        flowvt[:,:,tt+1]=resultsflowvt
+        # adjacentM[:,:,tt+1]=resultsM
         if print
             println("count(tt)=",count)
         end
@@ -465,7 +649,8 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
 
        
         println("For ",tt+1," iteration, the xBsetpoint is:", xBsetpoint[:,tt+1])
-        xBtvt[tt+1]=sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1] for i=1:N)
+        xBtvt[tt+1]=sum(flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(flowvt[i,N+1,tt+1] for i=1:N)
+        # xBtvt[tt+1]=sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1] for i=1:N)
         times[tt+1]=times[tt]+dt
         count=count+1
     end
@@ -497,12 +682,12 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     b3 = zeros(count)
     b4 = zeros(count)
     for t = 2:count
-        s += [sum(q_xB*(xBtvt[t] - xBsetpoint[end,t])^2), q_T*sum((Tvt[i,t]-Ts[i])^2 for i=1:N), r_flow*sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1),
+        s += [sum(q_xB*(xBtvt[t] - xBsetpoint[end,t])^2), q_T*sum((Tvt[i,t]-Ts[i])^2 for i=1:N), r_flow*sum((adjacentM[i,j,t]*flowvt[i,j,t] - adjacentM[i,j,t-1]*flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1),
                 r_heat*sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N), 0,0]
         b[t] = b[t-1] + q_xB*sum((xBtvt[t] - xBsetpoint[end,t])^2) + q_T*sum((Tvt[i,t]-Ts[i])^2 for i=1:N) + r_flow*sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1) + r_heat*sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N)
         b1[t] = b1[t-1] + q_xB*sum((xBtvt[t] - xBsetpoint[end,t])^2)
         b2[t] = b2[t-1] + q_T*sum((Tvt[i,t]-Ts[i])^2 for i=1:N)
-        b3[t] = b3[t-1] + r_flow*sum((flowvt[i,j,t] - flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1)
+        b3[t] = b3[t-1] + r_flow*sum((adjacentM[i,j,t]*flowvt[i,j,t] - adjacentM[i,j,t-1]*flowvt[i,j,t-1])^2 for i=1:N+1 for j=1:N+1)
         b4[t] = b4[t-1] + r_heat*sum((heatvt[i,t] - heatvt[i,t-1])^2 for i=1:N)
     end
     s[5] = maximum(Tvt[1,:])
@@ -533,7 +718,7 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     # write to excel file
     # top_excel_file = out_dir * "\\ML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_T0_" *string(round(initial_values[1,1]+Dist_T0[1,1];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) * ".xlsx"
     if MLcheck == false
-        top_excel_file = out_dir * "\\noML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_T0_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) 
+        top_excel_file = out_dir * "\\nobinaryflow_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_T0_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) 
     else 
         top_excel_file = out_dir * "\\ML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_T0_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4))
     end
@@ -565,6 +750,52 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
 end
 
 
+# function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one ODE solver to solve the whole system
+    
+#     if print
+#         println("These are the inputs for MPC_step_all")
+#         println("T=",T_0)
+#         println("Tin=",T0_in)
+#         println("xB=",xB_0)
+#         println("heat=",heat)
+#         println("flow=",Flow)
+#     end
+#     function odeodes!(du,u,p,t)
+#         for i=1:N # N reactors in total
+#             du[3*(i-1)+1] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+1] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i] - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+1] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3]) + heat[i]/rho/c_p/V[i]  # Temperature of the i th reactor
+#             du[3*(i-1)+2] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+2] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+2] for j=1:N+1)) + (-k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])
+#             du[3*(i-1)+3] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+3] for j=1:N) - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+3] for j=1:N+1)) + k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2] + (-k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3])
+#         end
+#     end
+#     # u[3*i+1] T
+#     # u[3*i+2] xA
+#     # u[3*i+3] xB
+
+#     initial_vec=zeros(3*N)
+
+#     for i=0:N-1
+#         initial_vec[3*i+1]=T_0[i+1]
+#         initial_vec[3*i+2]=xA_0[i+1]
+#         initial_vec[3*i+3]=xB_0[i+1]
+#     end
+#     if print
+#         println(initial_vec)
+#     end
+
+#     prob=ODEProblem(odeodes!,initial_vec,(0.0,dt))
+#     # prob=ODEProblem(odeodes!,initial_vec,(0.0,20*dt))
+#     soln=DifferentialEquations.solve(prob,Rosenbrock23())
+#     if print
+#         println("Next measurement is: ", last(soln.u))
+#     end
+#     return last(soln.u)
+#     # a=soln.t
+#     # A=Array(soln)
+#     # return a,A[1,:],A[2,:],A[3,:]
+#     # return a,A[4,:],A[5,:],A[6,:]
+#     # return the time array and simulated T, xA, xB arrays
+
+# end
 function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one ODE solver to solve the whole system
     
     if print
@@ -577,9 +808,9 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
     end
     function odeodes!(du,u,p,t)
         for i=1:N # N reactors in total
-            du[3*(i-1)+1] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+1] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i] - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+1] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3]) + heat[i]/rho/c_p/V[i]  # Temperature of the i th reactor
-            du[3*(i-1)+2] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+2] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+2] for j=1:N+1)) + (-k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])
-            du[3*(i-1)+3] = 1/V[i]*(sum(n[j,i]*Flow[j,i]*u[3*(j-1)+3] for j=1:N) - sum(n[i,j]*Flow[i,j]*u[3*(i-1)+3] for j=1:N+1)) + k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2] + (-k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3])
+            du[3*(i-1)+1] = 1/V[i]*(sum(Flow[j,i]*u[3*(j-1)+1] for j=1:N) + Flow[N+1,i]*T0_in[i] - sum(Flow[i,j]*u[3*(i-1)+1] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3]) + heat[i]/rho/c_p/V[i]  # Temperature of the i th reactor
+            du[3*(i-1)+2] = 1/V[i]*(sum(Flow[j,i]*u[3*(j-1)+2] for j=1:N) + Flow[N+1,i]*xA0 - sum(Flow[i,j]*u[3*(i-1)+2] for j=1:N+1)) + (-k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2])
+            du[3*(i-1)+3] = 1/V[i]*(sum(Flow[j,i]*u[3*(j-1)+3] for j=1:N) - sum(Flow[i,j]*u[3*(i-1)+3] for j=1:N+1)) + k1*exp(-E1/R_gas/u[3*(i-1)+1])*u[3*(i-1)+2] + (-k2*exp(-E2/R_gas/u[3*(i-1)+1])*u[3*(i-1)+3])
         end
     end
     # u[3*i+1] T
@@ -612,17 +843,30 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
 
 end
 
-
 function findSS_all(T0_in,T_0,xB_0,n;print=true)
     # assume there is no spliting
-    # TODO negative flowrate occurs for the mixing reactor with n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 1 0]
-    # TODO BoundErrors occur if n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 0 0]
-    println(T_0)
-    Lookup=findall(isone,n) # find all index of open streams
+    # println(T_0)
+    Lookup=findall(x->x!=0,n) # find all index of open streams
     L=length(Lookup)
-    if print
-        println("L=",L)
-    end
+    # turn n (N+1*N+1 matrix) into a 1-D array
+    # n = zeros(L)
+    # length_of_each_r = zeros(N+1)
+    # for j in 1:N+1 # permute 
+    #     rowindex = findall(x->x!=0,m[j,:])
+    #     length_of_each_r[j] = length(rowindex)
+    #     if j == 1
+    #         n[1:floor(Int,length_of_each_r[j])].=m[j,rowindex]
+    #     else
+    #         n[floor(Int,sum(length_of_each_r[a] for a=1:j-1)+1):(floor(Int,sum(length_of_each_r[a] for a=1:j)))].=m[j,rowindex]
+    #     end
+    # end
+    # # check if every element in n is nonzero
+    # if length(findall(x->x!=0,n))!=L
+    #     println("ERROR!")
+    #     println("n=",n)
+    #     return
+    # end
+
     flow_start=zeros(L)
     flow_start[:].=Ftest
     Ttot=zeros(N+1,N)
@@ -642,7 +886,6 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
     heat_start=zeros(N)
     for i=1:N
         heat_start[i] = -rho*c_p*V[i]*(1/V[i]*(sum(flow_start[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(flow_start[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i])) + (-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]))
-        # println("i=",i)
     end
 
     # initial_vec2=zeros(4*N*(N+4))
@@ -653,9 +896,9 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
 
     function f!(du,u)
         for i=1:N # N reactors in total
-            du[3*(i-1)+1] = 1/V[i]*(sum(u[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]) + u[L+i]/rho/c_p/V[i]
-            du[3*(i-1)+2] = 1/V[i]*(sum(u[k]*xBtot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*xB_0[i] for k=1:L if Lookup[k][1]==i)) + k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]) + (-k2*exp(-E2/R_gas/T_0[i])*xB_0[i])
-            du[3*(i-1)+3] = sum(u[k] for k=1:L if Lookup[k][2]==i) - sum(u[k] for k=1:L if Lookup[k][1]==i)
+            du[3*(i-1)+1] = 1/V[i]*(sum(u[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(n[k]*u[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]) + u[L+i]/rho/c_p/V[i]
+            du[3*(i-1)+2] = 1/V[i]*(sum(u[k]*xBtot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(n[k]*u[k]*xB_0[i] for k=1:L if Lookup[k][1]==i)) + k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]) + (-k2*exp(-E2/R_gas/T_0[i])*xB_0[i])
+            du[3*(i-1)+3] = sum(n[k]*u[k] for k=1:L if Lookup[k][2]==i) - sum(n[k]*u[k] for k=1:L if Lookup[k][1]==i)
         end
     end
     # u[1:L] are flow rates
@@ -687,6 +930,77 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
     return heat_ss,flow_ss,Lookup
 end
 
+# function findSS_all(T0_in,T_0,xB_0,m;print=true)
+#     # assume there is no spliting
+#     # println(T_0)
+#     L = (N+1)*(N+1)
+#     flow_start=zeros(L)
+#     flow_start[:].=Ftest
+#     flow_start2 = zeros(N+1,N+1)
+#     flow_start2[:,:].=Ftest
+#     Lookup=findall(x->x!=0,flow_start2)
+
+#     Ttot=zeros(N+1,N)
+#     xBtot=zeros(N+1,N)
+#     for i=1:N+1
+#         if i!=N+1
+#             Ttot[i,:].=T_0[i]
+#             xBtot[i,:].=xB_0[i]
+#         else
+#             for j=1:N
+#                 Ttot[i,j]=T0_in[j]
+#                 xBtot[i,j]=0
+#             end
+#         end
+#     end
+#     # println("FinalT=",Ttot," Length=",length(Ttot))
+#     heat_start=zeros(N)
+#     for i=1:N
+#         heat_start[i] = -rho*c_p*V[i]*(1/V[i]*(sum(flow_start[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(flow_start[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i])) + (-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]))
+#         # println("i=",i)
+#     end
+
+#     # initial_vec2=zeros(4*N*(N+4))
+#     initial_vec2=zeros(L + N) # flow+heat+xA
+
+#     initial_vec2[1:L] = flow_start
+#     initial_vec2[L+1:end] = heat_start
+
+#     function f!(du,u)
+#         for i=1:N # N reactors in total
+#             du[3*(i-1)+1] = 1/V[i]*(sum(u[k]*Ttot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*T_0[i] for k=1:L if Lookup[k][1]==i)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]))+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_0[i])*xB_0[i]) + u[L+i]/rho/c_p/V[i]
+#             du[3*(i-1)+2] = 1/V[i]*(sum(u[k]*xBtot[Lookup[k][1],i] for k=1:L if Lookup[k][2]==i) - sum(u[k]*xB_0[i] for k=1:L if Lookup[k][1]==i)) + k1*exp(-E1/R_gas/T_0[i])*(1-xB_0[i]) + (-k2*exp(-E2/R_gas/T_0[i])*xB_0[i])
+#             du[3*(i-1)+3] = sum(u[k] for k=1:L if Lookup[k][2]==i) - sum(u[k] for k=1:L if Lookup[k][1]==i)
+#         end
+#     end
+#     # u[1:L] are flow rates
+#     # u[L+1:L+N] is heating rate
+#     # u[L+N+1:end] is xA
+
+#     soln=nlsolve(f!,initial_vec2)
+#     heat_ss=zeros(N)
+#     flow_allconnected=zeros(L)
+#     # flow_ss=zeros(N)
+#     flow_ss=soln.zero[1:L]
+#     heat_ss=soln.zero[L+1:end]
+#     # for i=1:N
+#     #     for k=1:L
+#     #         if Lookup[k][1]==N+1&&Lookup[k][2]==i
+#     #             # println("i=",i," k=",k)
+#     #             flow_ss[i]=soln.zero[k]
+#     #         end
+#     #     end
+#     # end
+#     # println("Lookup=",Lookup)
+#     # println("flow_ss=",flow_ss," and the length =",length(flow_ss))
+#     # for i=1:L
+#     #     if flow_ss[i]<0
+#     #         println("flow_ss=",flow_ss)
+#     #         error("Negative flowrate occurs")
+#     #     end
+#     # end
+#     return heat_ss,flow_ss,Lookup
+# end
 
 # parallel_3R = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 # series_3R = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
@@ -703,3 +1017,7 @@ end
 # initial_conditions_4R_non_parallel = repeat([300 388.7 0.11],size(parallel_4R)[1] - 1) # same as above, just an example
 
 # disturbances = [0 0; 0 0; 0 0]
+# MPC_tracking("G:\\My Drive\\Research\\", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="continuous.pdf",MLcheck=false)
+# MPC_tracking("G:\\My Drive\\Research\\", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;-0.04],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 388.7 0.20;300 388.7 0.20;300 388.7 0.20];tmax=1500,print=true,save_plots=true,plot_name="nobinary_adaboost.pdf",MLcheck=false)
+MPC_tracking("G:\\My Drive\\Research\\", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+40 0+40;0+40 0+40;0+40 0+40],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="nobinary_adaboost.pdf",MLcheck=false)
+# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;-0.09],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],0,[340 388.7 0.19;340 388.7 0.19;340 388.7 0.19];tmax=3000,print=false,save_plots=true,plot_name="nobinary.pdf",MLcheck=false)

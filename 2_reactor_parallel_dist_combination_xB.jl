@@ -262,15 +262,20 @@ function MPC_tracking(Dist_T10,Dist_T20,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,dist_ti
     plot(times,[xB1vt,xB2vt,xBvt,T1vt,T2vt,T0_1invt,T0_2invt,heat1vt,heat2vt,flow1vt,flow2vt],layout=l,legend=false,xlabel="Time (s)", ylabel=["xB1" "xB2" "xB" "Temp1(K)" "Temp2(K)" "T1_Input(K)" "T2_Input(K)" "Q1(KW)" "Q2(KW)" "F1(m^3/s)" "F2(m^3/s)"],gridalpha=0.75,minorgrid=true,minorgridalpha=0.1)
     # plot(times,[T1vt,xA1vt,xB1vt,heat1vt,flow1vt,T2vt,xA2vt,xB2vt,heat2vt,flow2vt],layout=(2,5),legend=false,xlabel="Time (s)", ylabel=["Temp1(K)" "xA1" "xB1" "Q1(KW)" "F1(m^3/s)" "Temp2(K)" "xA2" "xB2" "Q2(KW)" "F2(m^3/s)"],
     #     gridalpha=0.75,minorgrid=true,minorgridalpha=0.3)
+    top_excel_file = out_dir * "\\2Rcode_T1_" * string(388.7) *"_T2_" * string(388.7) * "_T3_" * string(388.7) * "_xB1_" *string(0.11) * "_xB2_" *string(0.11) * "_xB3_" *string(0.11) * "_Tin1_" *string(300)* "_Tin2_" *string(300)*  "_Tin3_" *string(300)* "SetChange_xB_" * string(0.0) * "SetChange_T1_" * string(388.7) * "SetChange_T2_" * string(388.7) * "SetChange_T3_" * string(388.7) 
+    # R2=R3
+    df_MPC = DataFrame(times=vec(times), T01=vec(T0_1invt), T02=vec(T0_2invt), T03=vec(T0_2invt), T1initial=vec(T1vt), T2initial=vec(T2vt), T3initial=vec(T2vt), xB1initial=vec(xB1vt), xB2initial=vec(xB2vt), xB3initial=vec(xB2vt), xBtinitial=vec(xBvt), flowvt1=vec(flow1vt), flowvt2=vec(flow2vt), flowvt3=vec(flow2vt), heatvt1=vec(heat1vt), heatvt2=vec(heat2vt), heatvt3=vec(heat2vt), Performance_index=vec(b), xBt_PI=vec(b1), Tvt_PI=vec(b2), Fvt_PI=vec(b3), Qvt_PI=vec(b4), tt_stable=vec(fill(s[6],length(times))), Configuration_record=vec(record_configuration))
+
+    CSV.write(top_excel_file* ".csv", df_MPC)
 end
 
 function MPC_step(T0_in,T_0,xA_0,xB_0,heat,flow,dt)
-    println("These are the inputs for MPC_step_all")
-    println("T=",T_0)
-    println("Tin=",T0_in)
-    println("xB=",xB_0)
-    println("heat=",heat)
-    println("flow=",flow)
+    # println("These are the inputs for MPC_step_all")
+    # println("T=",T_0)
+    # println("Tin=",T0_in)
+    # println("xB=",xB_0)
+    # println("heat=",heat)
+    # println("flow=",flow)
     #Getting the measurement C and T, (steps forward in time by dt and takes new "measurements" by simulating the system with the decided control input)
     #Usually f(t,u) or in-place f(t,u,du),the latter is used here.
     f(y,p,t)=[flow/V*(T0_in-y[1])+(-d_H1*m/c_p*k1*exp(-E1/R_gas/y[1])*y[2])+(-d_H2*m/c_p*k2*exp(-E2/R_gas/y[1])*y[3])+heat/rho/c_p/V,
@@ -284,7 +289,7 @@ function MPC_step(T0_in,T_0,xA_0,xB_0,heat,flow,dt)
     #ODEProblem is defining a problem, to solve it, use solve() function
     soln=DifferentialEquations.solve(prob,Rosenbrock23())
     #For stiff problems art high tolerances, Rosenbrock23() is more efficient for small systems, TRBDF2 is better for large systems
-    println("Next measurement is: ", last(soln.u))
+    # println("Next measurement is: ", last(soln.u))
     return last(soln.u)
     # a=soln.t
     # A=Array(soln)
@@ -313,3 +318,5 @@ function findSS(T0_in,T10,xB10)
     flow_ss=soln.zero[1]
     return heat_ss,flow_ss,xA_ss
 end
+global out_dir = "G:\\My Drive\\Research\\GNN projects\\Data\\Parallel"
+MPC_tracking(0,0,1,1e7,1e7,1e-5,1e7,90,1000,0;tmax=1500)

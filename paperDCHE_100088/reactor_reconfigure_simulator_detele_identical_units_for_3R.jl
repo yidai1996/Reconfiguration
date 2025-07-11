@@ -1,9 +1,9 @@
 # For any given number of reactors and potential configurations
-# https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
-
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
+# https://aiche.onlinelibrary.wiley.com/doi/full/10.1002/aic.11801
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt #,BARON
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
+using CSV
 # include("permutation.jl")
 
 function loadProcessData(N::Int,n,initial_values;print=true)
@@ -106,10 +106,10 @@ function loadProcessData(N::Int,n,initial_values;print=true)
 end
 
 function MPC_solve1(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
-    println("n=",n)
+    # println("n=",n)
     global count
     New=size(n)[1]-1
-    println("New=",New)
+    # println("New=",New)
     K=round(Int,P/dt)
 
     MPC=Model(Ipopt.Optimizer)
@@ -126,10 +126,10 @@ function MPC_solve1(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_
         T_0=[T_0real[1],T_0real[end]]
         xA_0=[xA_0real[1],xA_0real[end]]
         xB_0=[xB_0real[1],xB_0real[end]]
-        println("Eliminate the identical units")
-        println("T0_in=",T0_in)
-        println("T0_0=",T_0)
-        println("xB=",xB_0)
+        # println("Eliminate the identical units")
+        # println("T0_in=",T0_in)
+        # println("T0_0=",T_0)
+        # println("xB=",xB_0)
     end
 
     # Only steady states for input streams from outside instead of other reactors
@@ -279,10 +279,10 @@ function MPC_solve1(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_
     return results_heat0, results_flow0
 end
 function MPC_solve2(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
-    println("n=",n)
+    # println("n=",n)
     global count
     New=size(n)[1]-1
-    println("New=",New)
+    # println("New=",New)
     K=round(Int,P/dt)
 
     MPC=Model(Ipopt.Optimizer)
@@ -299,10 +299,10 @@ function MPC_solve2(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_
         T_0=[T_0real[1],T_0real[end]]
         xA_0=[xA_0real[1],xA_0real[end]]
         xB_0=[xB_0real[1],xB_0real[end]]
-        println("Eliminate the identical units")
-        println("T0_in=",T0_in)
-        println("T0_0=",T_0)
-        println("xB=",xB_0)
+        # println("Eliminate the identical units")
+        # println("T0_in=",T0_in)
+        # println("T0_0=",T_0)
+        # println("xB=",xB_0)
     end
 
     # Only steady states for input streams from outside instead of other reactors
@@ -649,6 +649,8 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     # T0_invtnew[2,:]=T0_invt[1,:]
     # T0_invtnew[3,:]=T0_invt[2,:]
     # xBtvtnew=xBtvt
+    top_excel_file = out_dir * "\\noML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_Tin1_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "_Tin2_" *string(round(initial_values[2,1]+Dist_T0[2,2];digits=4))*  "_Tin3_" *string(round(initial_values[3,1]+Dist_T0[3,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) * "SetChange_T1_" * string(round(SetChange_T[1];digits = 4)) * "SetChange_T2_" * string(round(SetChange_T[2];digits = 4)) * "SetChange_T3_" * string(round(SetChange_T[3];digits = 4)) 
+
      # have to reshape because plot accepts a matrix not a vector, also must be 1xN not Nx1
     label = reshape(["R$i" for i in 1:N+1],1,N+1)
     if print || save_plots
@@ -668,7 +670,7 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         end
         if save_plots
             println("saving fig to $plot_name")
-            savefig(plot_name)
+            savefig(top_excel_file * plot_name)
         end
     end
 
@@ -713,6 +715,12 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     # # write to excel file
     # XLSX.writetable(top_excel_file, data, column_names)
     # close(file)
+    # top_excel_file = out_dir * "\\noML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_Tin1_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "_Tin2_" *string(round(initial_values[2,1]+Dist_T0[2,2];digits=4))*  "_Tin3_" *string(round(initial_values[3,1]+Dist_T0[3,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) * "SetChange_T1_" * string(round(SetChange_T[1];digits = 4)) * "SetChange_T2_" * string(round(SetChange_T[2];digits = 4)) * "SetChange_T3_" * string(round(SetChange_T[3];digits = 4)) 
+
+    df_MPC = DataFrame(times=vec(times), xBset=vec(xBsetpoint[end,:]), T01=vec(T0_invt[1,:]), T02=vec(T0_invt[2,:]), T03=vec(T0_invt[3,:]), T1initial=vec(Tvt[1,:]), T2initial=vec(Tvt[2,:]), T3initial=vec(Tvt[2,:]), xB1initial=vec(xBvt[1,:]), xB2initial=vec(xBvt[2,:]), xB3initial=vec(xBvt[3,:]), xBtinitial=vec(xBtvt), flowvt1=vec(flowvt[N+1,1,:]), flowvt2=vec(flowvt[N+1,2,:]), flowvt3=vec(flowvt[N+1,3,:]), heatvt1=vec(heatvt[1,:]), heatvt2=vec(heatvt[2,:]), heatvt3=vec(heatvt[3,:]), Tset1=vec(Tsetpoint[1,:]), Tset2=vec(Tsetpoint[2,:]), Tset3=vec(Tsetpoint[3,:]))
+    # df_MPC = DataFrame(data)
+    # df_MPC = convert(DataFrame, data)
+    CSV.write(top_excel_file* ".csv", df_MPC)
 
     return s
 
@@ -845,7 +853,7 @@ end
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\BARON\\symmetrybreaking"
-out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT\\With adjacency matrix\\4R"
+# out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT\\With adjacency matrix\\4R"
 # adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 # disturbances = [10 10; 0 0; 0 0]
 
@@ -867,6 +875,15 @@ out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry br
 #                     0.01	100000.0	1.0e11	0.001	1.0e6	0.023132865203311474	283914.8446502505	1.2595620665598227e-5	967729.0801870388	0.023132865203311474]
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Images"
 # save_profile_images_initial_conditions(top, adjacencies, disturbances, out_dir)
+
+out_dir = out_dir = "G:\\My Drive\\Research\\GNN projects\\Data\\Parallel"
+# MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
+#     dist_time,setpoint_time,initial_values;tmax=200,print=true,save_plots=false,plot_name="all_plots.png") 
+MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 1; 0 0 1; 1 1 0],[0+0 0+20;0+0 0+0;0+0 0+0],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf")
+
+@btime begin 
+    MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 1; 0 0 1; 1 1 0],[0+0 0+20;0+0 0+0;0+0 0+0],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=false,plot_name="all_plots.pdf")
+end
 
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R

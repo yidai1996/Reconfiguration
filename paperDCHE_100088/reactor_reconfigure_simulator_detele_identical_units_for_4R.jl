@@ -1,6 +1,5 @@
 # For any given number of reactors and potential configurations
-# https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
-
+# https://aiche.onlinelibrary.wiley.com/doi/full/10.1002/aic.11801
 using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
