@@ -103,7 +103,8 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
 
     K=round(Int,P/dt)
 
-    MPC=Model(Ipopt.Optimizer)
+    # MPC=Model(Ipopt.Optimizer)
+    MPC=JuMP.Model(Ipopt.Optimizer)
     # MPC=Model(() -> BARON.Optimizer(MaxTime=10000))
     MOI.set(MPC, MOI.RawOptimizerAttribute("print_level"), 1)
 
@@ -640,3 +641,4 @@ end
 # initial_conditions_4R_non_parallel = repeat([300 388.7 0.11],size(parallel_4R)[1] - 1) # same as above, just an example
 
 # disturbances = [0 0; 0 0; 0 0]
+MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for ESCAPE", [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0-0.09],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[335 438.7 0.11;335 438.7 0.11;335 438.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="all_plots.pdf")

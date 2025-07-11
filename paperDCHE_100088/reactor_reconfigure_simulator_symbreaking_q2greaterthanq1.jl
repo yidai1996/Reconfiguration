@@ -1,7 +1,7 @@
 # For any given number of reactors and potential configurations
-# https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
+# https://aiche.onlinelibrary.wiley.com/doi/full/10.1002/aic.11801
 
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt#,BARON
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
 # include("permutation.jl")
@@ -418,7 +418,7 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         end
         if save_plots
             println("saving fig to $plot_name")
-            savefig(plot_name)
+            savefig(out_dir*plot_name)
         end
     end
 
@@ -449,20 +449,20 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
     end
     #TODO go back to the permutation.jl, avg_max_xB += discrepancies[5] is s[5], not s[6]
 
-    println("writing performance to file")
-    top_file = out_dir * "\\Q2greaterthanQ1T3_10K.txt"
-    top_excel_file = out_dir * "\\Q2greaterthanQ1T3_10K.xlsx"
-    touch(top_file)
-    file = open(top_file, "w")
-    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
-    # write to text file
-    write(file, join(column_names, "\t") * "\n")
-    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
-    data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
-    writedlm(file, data)
-    # write to excel file
-    XLSX.writetable(top_excel_file, data, column_names)
-    close(file)
+    # println("writing performance to file")
+    # top_file = out_dir * "\\Q2greaterthanQ1T3_10K.txt"
+    # top_excel_file = out_dir * "\\Q2greaterthanQ1T3_10K.xlsx"
+    # touch(top_file)
+    # file = open(top_file, "w")
+    # column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable"]
+    # # write to text file
+    # write(file, join(column_names, "\t") * "\n")
+    # # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[1,N+1,:],flowvt[2,N+1,:],flowvt[3,N+1,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,fill(s[6],length(times))]
+    # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times))]
+    # writedlm(file, data)
+    # # write to excel file
+    # XLSX.writetable(top_excel_file, data, column_names)
+    # close(file)
 
     return s
 
@@ -592,7 +592,7 @@ end
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\BARON\\symmetrybreaking"
-out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Delete symmetry"
+# out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Delete symmetry"
 
 # adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 # disturbances = [10 10; 0 0; 0 0]
@@ -619,3 +619,6 @@ out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\Delete symm
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;10 10],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the second R
+
+out_dir = "G:\\My Drive\\Research\\GNN projects\\Data\\Parallel"
+MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+20;0+0 0+0;0+0 0+0],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="different_weighted_all_plots.pdf")

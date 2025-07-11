@@ -1,7 +1,6 @@
 # For any given number of reactors and potential configurations
-# https://www.sciencedirect.com/science/article/pii/S000925090800503X?casa_token=aY6Jl0CMNX5AAAAA:JUSu3a5swBkQP8395S3Tfvg0XHZKA5THcWVmWFVhob7QOhQIER3YlNL0F7cW2IbdYC5hzNqg#fig6
-
-using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt,BARON
+# https://aiche.onlinelibrary.wiley.com/doi/full/10.1002/aic.11801
+using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt#,BARON
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX
 using DataFrames
 # include("permutation.jl")
@@ -418,7 +417,7 @@ function MPC_tracking(n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q
         end
         if save_plots
             println("saving fig to $plot_name")
-            savefig(plot_name)
+            savefig(out_dir*plot_name)
         end
     end
 
@@ -592,7 +591,7 @@ end
 
 # out_dir = "C:\\Users\\sfay\\Documents\\Outputs\\Initial Condition Permutations\\"
 # out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\BARON\\symmetrybreaking"
-out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT"
+# out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry breaking using IPOPT"
 # adjacencies = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
 # disturbances = [10 10; 0 0; 0 0]
 
@@ -618,3 +617,11 @@ out_dir = "G:\\My Drive\\Research\\Symmetry detection\\My_own_model\\symmetry br
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # no disturbance
 # MPC_tracking([0 0 1 1;0 0  1 1], [10 10; 0 0],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the first R
 # MPC_tracking([0 0 1 1;0 0 1 1], [0 0;10 10],1,1e7,1e7,1e-3,1e9,90,1000,[8 15];tmax=5000) # disturbance on the second R
+
+
+out_dir = "G:\\My Drive\\Research\\GNN projects\\Data\\Parallel"
+MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+20;0+0 0+0;0+0 0+0],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="different_weighted_all_plots.pdf")
+
+# @btime begin 
+#     MPC_tracking([0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+20;0+0 0+0;0+0 0+0],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=false,plot_name="all_plots.pdf")
+# end

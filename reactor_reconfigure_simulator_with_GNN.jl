@@ -4,9 +4,98 @@ using Plots, JuMP, DifferentialEquations, NLsolve, BenchmarkTools, Ipopt
 using MathOptInterface, Printf, ProgressBars, DelimitedFiles, Profile, XLSX, CSV
 using DataFrames
 using MLJ
-# include("G:\\My Drive\\Research\\SVM\\Git\\Reclone\\Adaboost.jl")
 
-# include("permutation.jl")
+using LinearAlgebra
+# Define a function to normalize each column of the matrix
+function normalize_columns_between_0_and_1(matrix::Array{Float64, 2})
+    normalized_matrix = copy(matrix) # Create a copy to avoid modifying the original matrix
+    num_rows = size(matrix, 1) # Number of rows
+    num_cols = size(matrix, 2) # Number of columns
+
+    for j in 1:num_cols
+        col_min = minimum(matrix[:, j]) # Find the minimum value in the column
+        col_max = maximum(matrix[:, j]) # Find the maximum value in the column
+
+        if col_min != col_max
+            # Scale values to the range 0 to 1
+            normalized_matrix[:, j] .= (matrix[:, j] .- col_min) ./ (col_max - col_min)
+        else
+            # If col_min == col_max, all values in column are the same. Set them to 0.
+            normalized_matrix[:, j] .= 0
+        end
+    end
+    return normalized_matrix
+end
+
+using Flux
+using BSON: @load
+
+# Load the trained model parameters
+parameters = nothing
+@load "trained_gnn.bson" parameters
+
+# Redefine the GCN model and necessary functions exactly as in train_gnn.jl
+function gcn_layer(W, A, X)
+    return A * X * W
+end
+
+function GCN(A, X, num_hidden, embed_dim)
+    W1 = randn(Float32, size(X, 2), num_hidden)
+    W2 = randn(Float32, num_hidden, num_hidden)
+    W3 = randn(Float32, num_hidden, num_hidden)
+    W4 = randn(Float32, num_hidden, num_hidden)
+    W_out = randn(Float32, num_hidden, embed_dim)
+    params = Flux.params(W1, W2, W3, W4, W_out)
+
+    function forward(x)
+        h1 = gcn_layer(W1, A, x)
+        h2 = gcn_layer(W2, A, h1)
+        h3 = gcn_layer(W3, A, h2)
+        h4 = gcn_layer(W4, A, h3)
+        return A * (h4 * W_out)
+    end
+    
+    return forward, params
+end
+
+# Ensure the model structure matches the trained model
+
+# To load the matrix back, specify the delimiter as ','
+adjacency_matrix = readdlm("adjacency_matrix.csv", ',')
+
+X =   # Define your input features matrix here as in training
+num_hidden = 8  # Ensure this matches the training
+embed_dim = 5   # Ensure this matches the training
+
+forward, _ = GCN(adjacency_matrix, X, num_hidden, embed_dim)
+
+# Manually overwrite the parameters of the model with the loaded ones
+for (p_trained, p_model) in zip(parameters, Flux.params(forward))
+    p_model .= p_trained
+end
+
+# The input embedding will be classified into 2 groups: time horizon < 7, and time horizon >= 7
+# When it's < 7, the data before true starting point should be filled with the starting condition
+# When it's >= 7, the data should be filled with the latest 7 point
+function adjust_array_rows(arr::Array{T, 2}) where T
+    row_count = size(arr, 1)
+    println("arr = ", arr)
+    
+    if row_count < 7
+        # Extract the first row
+        first_row = collect(transpose(arr[1, :]))
+        println("first row = ", first_row)
+        # Repeat the first row to make a 7-row array
+        expanded_arr = vcat(repeat(first_row, 7 - row_count, 1), arr)
+    else
+        # Take the last 7 rows
+        expanded_arr = arr[row_count-6:row_count, :]
+    end
+    
+    return expanded_arr
+end
+
+
 
 function loadProcessData(N::Int,n,initial_values;print=true)
     # global F0=9/3600/N #m^3/s
@@ -75,7 +164,7 @@ function loadProcessData(N::Int,n,initial_values;print=true)
 
     global T0=initial_values[:,1] #K
     global Ts=initial_values[:,2] # will change with different input n and other initial conditions
-    # println("Ts=",Ts)
+    println("Ts=",Ts)
     global xBs=initial_values[:,3] # will change with different input n and other initial conditions
     global xAs=1 .- xBs # will change with different input n and other initial conditions
 
@@ -83,7 +172,7 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     global Flow0=zeros(N+1,N+1)
     global Q_nom=zeros(N)
     global F_nom
-    Q_nom,F_nom,ini_lookup=findSS_all(T0,Ts,xBs,n,print=print)
+    Q_nom,F_nom,ini_lookup=findSS_all(T0,Ts,xBs,n, N,print=print)
     for k=1:length(ini_lookup)
         for i=1:N+1
             for j=1:N+1
@@ -99,7 +188,7 @@ function loadProcessData(N::Int,n,initial_values;print=true)
     end
 end
 
-function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;heat_init=0,flow_init=0,print=true)
+function MPC_solve(xBset,Tset,n_original,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N_original, trajectory_data ;heat_init=0,flow_init=0,print=true)
     # println("n=",n)
     global count
 
@@ -120,7 +209,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     # Only steady states for input streams from outside instead of other reactors
     # heat_ss,flow_ss=findSS_all(T0_in,Ts,xBs,n,Flow)
     # println(Tset,xBset)
-    heat_ss,flow_ss,mpclook=findSS_all(T0_in,Tset,xBset,n,print=print)
+    heat_ss,flow_ss,mpclook=findSS_all(T0_in,Tset,xBset,n_original, N_original,print=print)
 
 
     if print
@@ -130,8 +219,8 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
     end
 
     for k=1:length(mpclook)
-        for i=1:N+1
-            for j=1:N+1
+        for i=1:N_original+1
+            for j=1:N_original+1
                 if mpclook[k][1]==i&&mpclook[k][2]==j
                     if flow_ss[k]<0
                         Flow[i,j]=1e-7
@@ -141,7 +230,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
             end
         end
     end
-    for i=1:N
+    for i=1:N_original
         if heat_ss[i]<0
             heat_ss[i]=1e-7
         end
@@ -151,24 +240,24 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         println("Flow=",Flow)
     end
 
-    xA_guess=zeros(N,K+1)
-    xB_guess=zeros(N,K+1)
-    T_guess=zeros(N,K+1)
-    for i=1:N
+    xA_guess=zeros(N_original,K+1)
+    xB_guess=zeros(N_original,K+1)
+    T_guess=zeros(N_original,K+1)
+    for i=1:N_original
         xA_guess[i,1]=xA_0[i]
         xB_guess[i,1]=xB_0[i]
         T_guess[i,1]=T_0[i]
     end
     xB_tot_guess=zeros(K+1)
-    xB_tot_guess[1]=sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,1] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+    xB_tot_guess[1]=sum(n_original[i,N_original+1]*Flow[i,N_original+1]*xB_guess[i,1] for i=1:N_original)/sum(n_original[i,N_original+1]*Flow[i,N_original+1] for i=1:N_original)
 
     for k=1:K
-        for i=1:N
-            T_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*T0_in[i]- sum(n[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V[i])*dt + T_guess[i,k]
-            xA_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N) + n[N+1,i]*Flow[N+1,i]*xA0 - sum(n[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
-            xB_guess[i,k+1] = (1/V[i]*(sum(n[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N) - sum(n[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
+        for i=1:N_original
+            T_guess[i,k+1] = (1/V[i]*(sum(n_original[j,i]*Flow[j,i]*T_guess[j,k] for j=1:N_original) + n_original[N_original+1,i]*Flow[N_original+1,i]*T0_in[i]- sum(n_original[i,j]*Flow[i,j]*T_guess[i,k] for j=1:N_original+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]) + heat_ss[i]/rho/c_p/V[i])*dt + T_guess[i,k]
+            xA_guess[i,k+1] = (1/V[i]*(sum(n_original[j,i]*Flow[j,i]*xA_guess[j,k] for j=1:N_original) + n_original[N_original+1,i]*Flow[N_original+1,i]*xA0 - sum(n_original[i,j]*Flow[i,j]*xA_guess[i,k] for j=1:N_original+1)) + (-k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k]))*dt + xA_guess[i,k]
+            xB_guess[i,k+1] = (1/V[i]*(sum(n_original[j,i]*Flow[j,i]*xB_guess[j,k] for j=1:N_original) - sum(n_original[i,j]*Flow[i,j]*xB_guess[i,k] for j=1:N_original+1)) + k1*exp(-E1/R_gas/T_guess[i,k])*xA_guess[i,k] + (-k2*exp(-E2/R_gas/T_guess[i,k])*xB_guess[i,k]))*dt + xB_guess[i,k]
         end
-        xB_tot_guess[k+1] = sum(n[i,N+1]*Flow[i,N+1]*xB_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+        xB_tot_guess[k+1] = sum(n_original[i,N_original+1]*Flow[i,N_original+1]*xB_guess[i,k] for i=1:N_original)/sum(n_original[i,N_original+1]*Flow[i,N_original+1] for i=1:N_original)
         # Tt_guess[k+1]=sum((n[i,N+1])*Flow[i,N+1]*T_guess[i,k] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
     end
 
@@ -176,6 +265,75 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         println("xB_guess=",xB_guess)
         println("xBt_guess=",xB_tot_guess)
     end
+
+    # Embedded GNN 
+    # Use the loaded model for inference
+    # trajectory_data should be 7*17
+    # trajectory_data_transpose = transpose(trajectory_data)
+    # println("data1 = ",trajectory_data_transpose)
+    # println("size1 = ", size(trajectory_data_transpose))
+    # global trajectory_data_matrix = collect(trajectory_data_transpose)
+    # println("data2 = ",trajectory_data_matrix)
+    # println("size2 = ", size(trajectory_data_matrix))
+    trajectory_data_filled = adjust_array_rows(trajectory_data) 
+    
+    trajectory_before_norm = collect(transpose(trajectory_data_filled))
+    println("data = ",trajectory_before_norm)
+    println("size = ", size(trajectory_before_norm))
+    new_node_features_norm = normalize_columns_between_0_and_1(trajectory_before_norm)
+    result_embedding = forward(new_node_features_norm)
+    # println("New embeddings: ", new_embeddings_setpoint)
+
+    R_similarity = [1 1 1] # R12 R13 R23
+    # xB, T, F, Q, Tin
+    xB_12 = cosine_similarity(result_embedding[7,:], result_embedding[8,:])
+    T_12 = cosine_similarity(result_embedding[4,:], result_embedding[5,:])
+    # F_12 = cosine_similarity(result_embedding[11,:], result_embedding[12,:])
+    # Q_12 = cosine_similarity(result_embedding[14,:], result_embedding[15,:])
+    # R_12_similarity_check = [xB_12 T_12 F_12 Q_12]
+    R_12_similarity_check = [xB_12 T_12]
+    if any(x -> x<0, R_12_similarity_check)
+        R_similarity[1]  = 0
+    end
+
+    # comparison between R1 and R3
+    xB_13 = cosine_similarity(result_embedding[7,:], result_embedding[9,:])
+    T_13 = cosine_similarity(result_embedding[4,:], result_embedding[6,:])
+    # F_13 = cosine_similarity(result_embedding[11,:], result_embedding[13,:])
+    # Q_13 = cosine_similarity(result_embedding[14,:], result_embedding[16,:])
+    # R_13_similarity_check = [xB_13 T_13 F_13 Q_13]
+    R_13_similarity_check = [xB_13 T_13]
+    if any(x -> x<0, R_13_similarity_check)
+        R_similarity[2]  = 0
+    end
+
+    # comparison between R2 and R3
+    xB_23 = cosine_similarity(result_embedding[8,:], result_embedding[9,:])
+    T_23 = cosine_similarity(result_embedding[4,:], result_embedding[6,:])
+    # F_23 = cosine_similarity(result_embedding[12,:], result_embedding[13,:])
+    # Q_23 = cosine_similarity(result_embedding[15,:], result_embedding[16,:])
+    R_23_similarity_check = [xB_23 T_23 F_23 Q_23]
+    R_23_similarity_check = [xB_23 T_23]
+    if any(x -> x<0, R_23_similarity_check)
+        R_similarity[3]  = 0
+    end 
+
+    num_idential = size(filter(!iszero, R_similarity))
+    if num_idential == 2
+        println("ERROR: Appear 2 pairs of identical units in a 3R system")
+    elseif num_idential == 3
+        println("All units are identical")
+        # Reduce the system to 1 unit by modifying MPC code
+        n = [0 1; 1 0] 
+        N = 1
+    elseif num_idential == 1
+        N = 2
+        # Change the MPC code for reducing one unit 
+        n = [0 0 1; 0 0 1; 1 1 0]
+    else
+        N = N_original
+        n = n_original
+    end   
 
     JuMP.@variables MPC begin
         # Q[i=1:N,k=0:K-1], (lower_bound=0.2*heat_ss[i], upper_bound=1.8*heat_ss[i],start=heat_ss[i])# Q of the reactors
@@ -195,18 +353,46 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         T_init[i=1:N], T[i,0]==T_0[i]
         xA_init[i=1:N], xA[i,0]==xA_0[i]
         xB_init[i=1:N], xB[i,0]==xB_0[i]
-        xBt_init, xBt[0]==sum(n[i,N+1]*Flow[i,N+1]*xB_0[i] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+        # xBt_init, xBt[0]==sum(n[i,N+1]*Flow[i,N+1]*xB_0[i] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
         MassB[i=1:N,k=0:K-1], sum(n[j,i]*F[j,i,k] for j=1:N+1)==sum(n[i,j]*F[i,j,k] for j=1:N+1)
+    end
+
+    if N == 1 || N == 3
+        JuMP.@constraints MPC begin
+            xBt_init, xBt[0]==sum(n[i,N+1]*Flow[i,N+1]*xB_0[i] for i=1:N)/sum(n[i,N+1]*Flow[i,N+1] for i=1:N)
+        end
+    elseif N == 2 
+        JuMP.@constraints MPC begin
+            xBt_init, xBt[0]==(n[1,N+1]*(R_similarity[1] + R_similarity[2] + 1)*Flow[1,N+1]*xB_0[1] + n[2,N+1]*(R_similarity[3] + 1)*Flow[2,N+1]*xB_0[2])/(n[1,N+1]*(R_similarity[1] + R_similarity[2] + 1)*Flow[1,N+1] + n[2,N+1]*(R_similarity[3] + 1)*Flow[2,N+1])
+        end
+    else
     end
 
     JuMP.@NLconstraints MPC begin
         Temp[i=1:N,k=0:K-1], T[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*T[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*T0_in[i]- sum(n[i,j]*F[i,j,k]*T[i,k] for j=1:N+1)) + (-d_H1*mass/c_p*k1*exp(-E1/R_gas/T[i,k])*xA[i,k])+(-d_H2*mass/c_p*k2*exp(-E2/R_gas/T[i,k])*xB[i,k]) + Q[i,k]/rho/c_p/V[i])*dt + T[i,k]
         MoleFractionxA[i=1:N,k=0:K-1], xA[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xA[j,k] for j=1:N) + n[N+1,i]*F[N+1,i,k]*xA0 - sum(n[i,j]*F[i,j,k]*xA[i,k] for j=1:N+1)) + (-k1*exp(-E1/R_gas/T[i,k])*xA[i,k]))*dt + xA[i,k]
         MoleFractionxB[i=1:N,k=0:K-1], xB[i,k+1] == (1/V[i]*(sum(n[j,i]*F[j,i,k]*xB[j,k] for j=1:N) - sum(n[i,j]*F[i,j,k]*xB[i,k] for j=1:N+1)) + k1*exp(-E1/R_gas/T[i,k])*xA[i,k] + (-k2*exp(-E2/R_gas/T[i,k])*xB[i,k]))*dt + xB[i,k]
-        OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
+        # OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
     end
 
-    JuMP.@objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    if N == 1 || N == 3
+        JuMP.@NLconstraints MPC begin
+            OutputMoleFraction[k=0:K-1], xBt[k+1] == sum(n[i,N+1]*F[i,N+1,k]*xB[i,k+1] for i=1:N)/sum(n[i,N+1]*F[i,N+1,k] for i=1:N)
+        end
+    elseif N == 2 
+        JuMP.@NLconstraints MPC begin
+            OutputMoleFraction[k=0:K-1], xBt[k+1] == (n[1,N+1]*(R_similarity[1] + R_similarity[2] + 1)*Flow[1,N+1,k]*xB_0[1,k+1] + n[2,N+1]*(R_similarity[3] + 1)*Flow[2,N+1,k]*xB_0[2,k+1])/(n[1,N+1]*(R_similarity[1] + R_similarity[2] + 1)*Flow[1,N+1,k] + n[2,N+1]*(R_similarity[3] + 1)*Flow[2,N+1,k])
+        end
+    else
+    end
+
+    if N==1 || N == 3
+        JuMP.@objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    elseif N == 2 
+        JuMP.@objective(MPC,Min,sum((R_similarity[1] + R_similarity[2] + 1)*q_T*(T[1,k]-Tset[1])^2 + (R_similarity[3] + 1)*q_T*(T[2,k]-Tset[2])^2 for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
+    else
+    end
+    # JuMP.@objective(MPC,Min,sum(q_T*(T[i,k]-Tset[i])^2 for i=1:N for k=0:K)+sum(q_xB*(xBt[k]-xBset[end])^2 for k=0:K)+sum(r_heat*(Q[i,k]-Q[i,k-1])^2 for i=1:N for k=1:K-1) + sum(r_flow*(n[i,j]*F[i,j,k]-n[i,j]*F[i,j,k-1])^2 for i=1:N+1 for j=1:N+1 for k=1:K-1) + sum(r_heat*(Q[i,0]-Q[i,K-1])^2 for i=1:N) + sum(r_flow*(n[i,j]*F[i,j,0]-n[i,j]*F[i,j,K-1])^2 for i=1:N+1 for j=1:N+1))
 
     JuMP.optimize!(MPC)
 
@@ -251,7 +437,7 @@ function MPC_solve(xBset,Tset,n,Flow,T0_inreal,T_0real,xA_0real,xB_0real,q_T,q_x
         println("soln_heat=",results_heat0)
         println("soln_flow=",results_flow0)
     end
-    return results_heat0, results_flow0, obj_xBt,obj_T,obj_Q,obj_F,obj
+    return R_similarity, results_heat0, results_flow0, obj_xBt,obj_T,obj_Q,obj_F,obj
 
 end
 
@@ -263,7 +449,7 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     # N=length(Dist_T0)
     # When testing continous disturbance system, the Dist_T0 contains the beginning point
     println(tmax)
-    global N=size(n1)[1]-1
+    N=size(n1)[1]-1
     if print
         println("N=",N)
     end
@@ -395,14 +581,63 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
                 break
             end
         end
+
+        # n * 17 matrix
+        # vectors = [xBsetpoint[3,1:tt], T0_invt[1,1:tt], T0_invt[2,1:tt], T0_invt[3,1:tt], Tvt[1,1:tt], Tvt[2,1:tt], Tvt[3,1:tt], xBvt[1,1:tt], xBvt[2,1:tt], xBvt[3,1:tt], xBtvt[1:tt], flowvt[1,N+1,1:tt], flowvt[2,N+1,1:tt], flowvt[3,N+1,1:tt], heatvt[1,1:tt], heatvt[2,1:tt], heatvt[3,1:tt] ]
+        vectors = [xBsetpoint[3,1:tt]  T0_invt[1,1:tt]  T0_invt[2,1:tt] T0_invt[3,1:tt]  Tvt[1,1:tt] Tvt[2,1:tt] Tvt[3,1:tt]  xBvt[1,1:tt]  xBvt[2,1:tt]  xBvt[3,1:tt]  xBtvt[1:tt]  flowvt[1,N+1,1:tt]  flowvt[2,N+1,1:tt]  flowvt[3,N+1,1:tt]  heatvt[1,1:tt]  heatvt[2,1:tt]  heatvt[3,1:tt] ]
+
+        global simulation_trajectory = hcat(vectors)
+        println("trajectory_data", simulation_trajectory)
  
-        resultsheatvt,resultsflowvt,obj_output_xBt[tt+1],obj_output_T[tt+1],obj_output_Q[tt+1],obj_output_F[tt+1],obj_output_total[tt+1]=MPC_solve(xBsetpoint[:,tt],Tsetpoint[:,tt],adjacentM[:,:,tt],flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N;
+        similarity, resultsheatvt,resultsflowvt,obj_output_xBt[tt+1],obj_output_T[tt+1],obj_output_Q[tt+1],obj_output_F[tt+1],obj_output_total[tt+1]=MPC_solve(xBsetpoint[:,tt],Tsetpoint[:,tt],adjacentM[:,:,tt],flowvt[:,:,tt],T0_invt[:,tt],Tvt[:,tt],xAvt[:,tt],xBvt[:,tt],q_T,q_xA,q_xB,r_heat,r_flow,dt,P,N, simulation_trajectory;
             heat_init=heatvt[1,tt],flow_init=flowvt[1,1,tt],print=print)
 
-        for i=1:N
-            heatvt[i,tt+1]=resultsheatvt[i]
-            flowvt[:,:,tt+1]=resultsflowvt
-        end
+        # for i=1:N
+        #     heatvt[i,tt+1]=resultsheatvt[i]
+        #     flowvt[:,:,tt+1]=resultsflowvt
+        # end
+
+        # Only works for parallel
+        num_idential = size(filter(!iszero, similarity))
+        if num_idential == 2
+            println("ERROR: Appear 2 pairs of identical units in a 3R system")
+        elseif num_idential == 3
+            println("All units are identical")
+            for i=1:N
+                heatvt[i,tt+1]=resultsheatvt[1]
+                flowvt[i,N+1,tt+1]=resultsflowvt[1,2]
+                flowvt[N+1,i,tt+1]=resultsflowvt[2,1]
+            end
+        elseif num_idential == 1
+            if similarity[1] == 1 # R1 and R2 are identical
+                flowvt[1,N+1,tt+1]=resultsflowvt[1,3]
+                flowvt[2,N+1,tt+1]=resultsflowvt[1,3]
+                flowvt[3,N+1,tt+1]=resultsflowvt[2,3]
+                flowvt[N+1,1,tt+1]=resultsflowvt[3,1]
+                flowvt[N+1,2,tt+1]=resultsflowvt[3,1]
+                flowvt[N+1,3,tt+1]=resultsflowvt[3,2]
+            elseif similarity[2] == 1 # R1 and R3 are identical
+                flowvt[1,N+1,tt+1]=resultsflowvt[1,3]
+                flowvt[2,N+1,tt+1]=resultsflowvt[2,3]
+                flowvt[3,N+1,tt+1]=resultsflowvt[1,3]
+                flowvt[N+1,1,tt+1]=resultsflowvt[3,1]
+                flowvt[N+1,2,tt+1]=resultsflowvt[3,2]
+                flowvt[N+1,3,tt+1]=resultsflowvt[3,1]
+            else # R2 and R3 are identical
+                flowvt[1,N+1,tt+1]=resultsflowvt[1,3]
+                flowvt[2,N+1,tt+1]=resultsflowvt[2,3]
+                flowvt[3,N+1,tt+1]=resultsflowvt[2,3]
+                flowvt[N+1,1,tt+1]=resultsflowvt[3,1]
+                flowvt[N+1,2,tt+1]=resultsflowvt[3,2]
+                flowvt[N+1,3,tt+1]=resultsflowvt[3,2]
+            end
+        else # All different
+            for i=1:N
+                heatvt[i,tt+1]=resultsheatvt[i]
+                flowvt[:,:,tt+1]=resultsflowvt
+            end            
+        end   
+
         if print
             println("count(tt)=",count)
         end
@@ -477,7 +712,7 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
         end
 
        
-        # println("For ",tt+1," iteration, the xBsetpoint is:", xBsetpoint[:,tt+1])
+        println("For ",tt+1," iteration, the xBsetpoint is:", xBsetpoint[:,tt+1])
         xBtvt[tt+1]=sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1]*xBvt[i,tt+1] for i=1:N)/sum(adjacentM[i,N+1,tt+1]*flowvt[i,N+1,tt+1] for i=1:N)
         times[tt+1]=times[tt]+dt
         count=count+1
@@ -535,7 +770,7 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     # touch(top_file)
     # file = open(top_file, "w")
     
-    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Tset1", "Tset2", "Tset3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable","Configuration_record"]
+    column_names = ["times","xBset","T01","T02", "T03", "Tvt1","Tvt2","Tvt3", "xBvt1","xBvt2","xBvt3", "xBtvt", "flowvt1", "flowvt2","flowvt3","heatvt1","heatvt2","heatvt3", "Performance index", "xBt PI","Tvt PI","Fvt PI","Qvt PI","tt_stable","Configuration_record"]
     # data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],obj_output_total,obj_output_xBt,obj_output_T,obj_output_F,obj_output_Q,fill(s[6],length(times)),record_configuration]
     data=[times,xBsetpoint[end,:],T0_invt[1,:],T0_invt[2,:],T0_invt[3,:],Tvt[1,:],Tvt[2,:],Tvt[3,:],xBvt[1,:],xBvt[2,:],xBvt[3,:],xBtvt,flowvt[N+1,1,:],flowvt[N+1,2,:],flowvt[N+1,3,:],heatvt[1,:],heatvt[2,:],heatvt[3,:],b,b1,b2,b3,b4,fill(s[6],length(times)),record_configuration]
 
@@ -546,9 +781,7 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     # write to excel file
     # top_excel_file = out_dir * "\\ML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_T0_" *string(round(initial_values[1,1]+Dist_T0[1,1];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) * ".xlsx"
     if MLcheck == false
-        # top_excel_file = out_dir * "\\noML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_Tin1_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "_Tin2_" *string(round(initial_values[2,1]+Dist_T0[2,2];digits=4))*  "_Tin3_" *string(round(initial_values[3,1]+Dist_T0[3,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4))  
-
-        top_excel_file = out_dir * "\\noML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_Tin1_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "_Tin2_" *string(round(initial_values[2,1]+Dist_T0[2,2];digits=4))*  "_Tin3_" *string(round(initial_values[3,1]+Dist_T0[3,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) * "SetChange_T1_" * string(round(SetChange_T[1];digits = 4)) * "SetChange_T2_" * string(round(SetChange_T[2];digits = 4)) * "SetChange_T3_" * string(round(SetChange_T[3];digits = 4)) 
+        top_excel_file = out_dir * "\\noML_initial_T1_" * string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_Tin1_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "_Tin2_" *string(round(initial_values[2,1]+Dist_T0[2,2];digits=4))*  "_Tin3_" *string(round(initial_values[3,1]+Dist_T0[3,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4)) 
     else 
         top_excel_file = out_dir * "\\ML_initial_T1_" * plot_name* string(round(initial_values[1,2];digits=4)) *"_T2_" * string(round(initial_values[2,2];digits=4)) * "_T3_" * string(round(initial_values[3,2];digits=4)) * "_xB1_" *string(round(initial_values[1,3];digits=4)) * "_xB2_" *string(round(initial_values[2,3];digits=4)) * "_xB3_" *string(round(initial_values[3,3];digits=4)) * "_T0_" *string(round(initial_values[1,1]+Dist_T0[1,2];digits=4))* "SetChange_xB_" * string(round(SetChange_xB[end];digits = 4))
     end
@@ -556,8 +789,8 @@ function MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChang
     # close(file)
     
     # DataFrame
-    # println(convert(Vector,times))
-    df_MPC = DataFrame(times=vec(times), xBset=vec(xBsetpoint[end,:]), T01=vec(T0_invt[1,:]), T02=vec(T0_invt[2,:]), T03=vec(T0_invt[3,:]), T1initial=vec(Tvt[1,:]), T2initial=vec(Tvt[2,:]), T3initial=convert(Vector,Tvt[3,:]), xB1initial=vec(xBvt[1,:]), xB2initial=vec(xBvt[2,:]), xB3initial=vec(xBvt[3,:]), xBtinitial=vec(xBtvt), flowvt1=vec(flowvt[N+1,1,:]), flowvt2=vec(flowvt[N+1,2,:]), flowvt3=vec(flowvt[N+1,3,:]), heatvt1=vec(heatvt[1,:]), heatvt2=vec(heatvt[2,:]), heatvt3=vec(heatvt[3,:]), Tset1=vec(Tsetpoint[1,:]), Tset2=vec(Tsetpoint[2,:]), Tset3=vec(Tsetpoint[3,:]), Performance_index=vec(b), xBt_PI=vec(b1), Tvt_PI=vec(b2), Fvt_PI=vec(b3), Qvt_PI=vec(b4), tt_stable=vec(fill(s[6],length(times))), Configuration_record=vec(record_configuration))
+    println(convert(Vector,times))
+    df_MPC = DataFrame(times=vec(times), xBset=vec(xBsetpoint[end,:]), T01=vec(T0_invt[1,:]), T02=vec(T0_invt[2,:]), T03=vec(T0_invt[3,:]), T1initial=vec(Tvt[1,:]), T2initial=vec(Tvt[2,:]), T3initial=convert(Vector,Tvt[3,:]), xB1initial=vec(xBvt[1,:]), xB2initial=vec(xBvt[2,:]), xB3initial=vec(xBvt[3,:]), xBtinitial=vec(xBtvt), flowvt1=vec(flowvt[N+1,1,:]), flowvt2=vec(flowvt[N+1,2,:]), flowvt3=vec(flowvt[N+1,3,:]), heatvt1=vec(heatvt[1,:]), heatvt2=vec(heatvt[2,:]), heatvt3=vec(heatvt[3,:]), Performance_index=vec(b), xBt_PI=vec(b1), Tvt_PI=vec(b2), Fvt_PI=vec(b3), Qvt_PI=vec(b4), tt_stable=vec(fill(s[6],length(times))), Configuration_record=vec(record_configuration))
     # df_MPC = DataFrame(data)
     # df_MPC = convert(DataFrame, data)
     CSV.write(top_excel_file* ".csv", df_MPC)
@@ -628,11 +861,11 @@ function MPC_step_all(T0_in,T_0,xA_0,xB_0,heat,Flow,n,dt;print=true) # Use one O
 end
 
 
-function findSS_all(T0_in,T_0,xB_0,n;print=true)
+function findSS_all(T0_in,T_0,xB_0,n, N;print=true)
     # assume there is no spliting
     # TODO negative flowrate occurs for the mixing reactor with n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 1 0]
     # TODO BoundErrors occur if n=[0 0 0 1 0; 0 0 0 1 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 0 0]
-    # println(T_0)
+    println(T_0)
     Lookup=findall(isone,n) # find all index of open streams
     L=length(Lookup)
     if print
@@ -703,39 +936,4 @@ function findSS_all(T0_in,T_0,xB_0,n;print=true)
 end
 
 
-# parallel_3R = [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-# series_3R = [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
-# parallel_2_and_1_3R = [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0]
-# mixing_3R = [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0]
-# parallel_4R = [0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 0 0 0 0 1; 1 1 1 1 0]
-# non_parallel_4R = [0 0 1 0 0; 0 0 1 0 0; 0 0 0 1 0; 0 0 0 0 1; 1 1 1 1 0] # just an example, this is 1 and 2 mix into 3 and 4 is in series after 3
-
-# initial_conditions = repeat([300 388.7 0.11],size(parallel_3R)[1] - 1)
-# initial_conditions_3R_series = [300 370 0.055;300 380 0.08; 300 388.7 0.11] # 3R series
-# initial_conditions_3R_2_and_1 = [300 370 0.055;300 388.7 0.11; 300 388.7 0.11] # 3R 2and1 parallel
-# initial_conditions_3R_mixing = [300 370 0.055;300 370 0.055; 300 388.7 0.11] # 3R mixing
-# initial_conditions_4R_parallel = repeat([300 388.7 0.11],size(parallel_4R)[1] - 1)
-# initial_conditions_4R_non_parallel = repeat([300 388.7 0.11],size(parallel_4R)[1] - 1) # same as above, just an example
-
-# disturbances = [0 0; 0 0; 0 0]
-
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for AIChE pre\\withoutML\\parallel", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+40;0+0 0+40;0+0 0+40],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for AIChE pre\\withoutML\\hybrid", [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+40;0+0 0+40;0+0 0+40],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for AIChE pre\\withoutML\\mixing", [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0],[0+0 0+40;0+0 0+40;0+0 0+40],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for AIChE pre\\withoutML\\series", [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0],[0+0 0+40;0+0 0+40;0+0 0+40],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for ESCAPE", [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0-0.09],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],1,[335 438.7 0.11;335 438.7 0.11;335 438.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for ESCAPE", [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0-0.08],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[335 438.7 0.11;335 438.7 0.11;335 438.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=true)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for ESCAPE", [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 0 1 0; 0 0 1 0; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0-0.09],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[335 438.7 0.11;335 438.7 0.11;335 438.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for ESCAPE", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0-0.09],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[335 438.7 0.11;335 438.7 0.11;335 438.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-# MPC_tracking("G:\\My Drive\\Research\\MLReconfiguration\\data for ESCAPE", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0-0.09],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,2],0,[340 388.7 0.19;340 388.7 0.19;340 388.7 0.19];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=true)
-
-# MPC_tracking("G:\\My Drive\\Class slices\\2024Fall\\IOE618\\project", [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 1 1 0], [0+0 0+0;0+0 0+20;0+0 0+0],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-
-MPC_tracking("G:\\My Drive\\Research\\", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0+40 0+40;0+40 0+40;0+40 0+40],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
-
-# @btime begin 
-#     MPC_tracking("G:\\My Drive\\Research\\GNN projects\\Data\\Parallel", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+20],[0;0;0],[0+0 ;0+0 ;0+0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=false,plot_name="all_plots.pdf",MLcheck=false)
-# end
-# MPC_tracking(out_dir, n1::Array{Int,2},n2,Dist_T0,SetChange_xB,SetChange_T,q_T,q_xA,q_xB,r_heat,r_flow,dt,P,
-#     dist_time,setpoint_time,initial_values; tmax=200,print=true,save_plots=false,plot_name="all_plots.png",MLcheck=false) # This is for continous disturbance on the (unstable) input temperature
-# MPC_tracking("G:\\My Drive\\Research\\GNN projects\\Data\\Parallel", [0 0 1; 0 0 1; 1 1 0], [0 0 1; 0 0 1; 1 1 0],[0+0 0+0; 0 0],[0; 0],[0+0 ;0 + 0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11];tmax=1500,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
+MPC_tracking("G:\\My Drive\\Research\\GNN projects\\Data\\Parallel", [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0], [0 0 0 1; 0 0 0 1; 0 0 0 1; 1 1 1 0],[0+0 0+0;0+0 0+0;0+0 0+0],[0;0;0],[0 ;0 ;0 ],1,1e7,1e7,1e-5,1e7,90,1000,[0,15],15,[300 388.7 0.11;300 388.7 0.11;300 388.7 0.11];tmax=3000,print=false,save_plots=true,plot_name="all_plots.pdf",MLcheck=false)
